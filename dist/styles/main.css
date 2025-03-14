@@ -8,12 +8,13 @@
   --ext-gray-800: #1f2937;
 }
 :root {
-  --ext-background: #121212;
-  --ext-foreground: #ffffff;
+  --ext-background: #ffffff;
+  --ext-foreground: #121212;
   --ext-border: #2d2d2d;
   --ext-gray-400: #9ca3af;
   --ext-gray-500: #6b7280;
   --ext-gray-800: #1f2937;
+  --ext-accent: #ff6719;
 }
 
 .nav-item {
@@ -33,7 +34,7 @@
 
 .sidebar-closed-container {
   position: fixed;
-  top: 5px;
+  top:50%;
   right: 5px;
   z-index: 40;
   border-radius: 0.375rem;
@@ -54,10 +55,41 @@
   z-index: 999;
   background-color: #121212;
   color: #ffffff;
+  display: flex;
+  flex-direction: column;
 }
 
 .sidebar-open-active {
   transform: translateX(0);
+}
+
+/* Tabs styling */
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--ext-border);
+  background-color: var(--ext-background);
+}
+
+.sidebar-tab {
+  flex: 1;
+  padding: 12px;
+  background: none;
+  border: none;
+  color: var(--ext-gray-400);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  border-bottom: 2px solid transparent;
+}
+
+.sidebar-tab:hover {
+  color: var(--ext-foreground);
+}
+
+.sidebar-tab.active {
+  color: var(--ext-accent);
+  border-bottom: 2px solid var(--ext-accent);
 }
 
 .sidebar-content-wrapper {
@@ -165,6 +197,12 @@
   border-radius: 0.375rem;
   background-color: #1f2937;
   color: #ffffff;
+}
+
+.sidebar-post-container {
+  padding: 1rem;
+  overflow-y: auto;
+  height: 90vh;
 }
 
 .generate-button {

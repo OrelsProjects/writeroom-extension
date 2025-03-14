@@ -11,7 +11,7 @@
   "content_scripts": [
     {
       "js": ["assets/contentScript.js"],
-      "matches": ["https://*.substack.com/publish/post/*"],
+      "matches": ["https://*.substack.com/publish/post/*", "https://*.substack.com/*"],
       "run_at": "document_end"
     }
   ],
@@ -25,6 +25,12 @@
       "matches": ["<all_urls>"]
     }
   ],
-  "permissions": ["cookies", "storage"],
+  "permissions": [
+    "cookies", 
+    "storage", 
+    "scripting", 
+    "tabs", 
+    "activeTab"
+  ],
   "host_permissions": ["http://localhost:3000/*", "https://*.substack.com/*"]
 }

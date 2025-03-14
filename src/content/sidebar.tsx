@@ -9,6 +9,7 @@ import {
   insertSubtitle,
 } from "@/components/ui/generateButton";
 import { useOutsideClick } from "@/lib/hooks/useOutsideClick";
+import SubstackPoster from "@/components/SubstackPoster";
 
 export interface SidebarProps {
   children: React.ReactNode;
@@ -21,6 +22,7 @@ const Sidebar = ({ children }: SidebarProps) => {
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'ideas' | 'post'>('ideas');
 
   useEffect(() => {
     if (selectedIdea) {
@@ -47,10 +49,15 @@ const Sidebar = ({ children }: SidebarProps) => {
     }
   };
 
+  // Add a click handler to prevent clicks from propagating to the document
+  const handleSidebarClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
+
   return (
     <>
       <AnimatePresence>
-        {!isOpen && (
+        {true && (
           <motion.div
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
@@ -72,7 +79,7 @@ const Sidebar = ({ children }: SidebarProps) => {
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {isOpen && (
+        {true && (
           <motion.div
             ref={sidebarRef}
             initial={{ x: "100%" }}
@@ -81,35 +88,61 @@ const Sidebar = ({ children }: SidebarProps) => {
             key="sidebar"
             transition={{ duration: 0.3 }}
             className={`sidebar-open-container ${
-              isOpen ? "sidebar-open-active" : ""
+              true ? "sidebar-open-active" : ""
             }`}
+            onClick={handleSidebarClick}
           >
-            <div className="sidebar-content-wrapper">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleGenerateIdeas();
-                }}
-                disabled={isLoading}
-                className="generate-button"
+            <div className="sidebar-tabs">
+              <button 
+                className={`sidebar-tab ${activeTab === 'ideas' ? 'active' : ''}`}
+                onClick={() => setActiveTab('ideas')}
               >
-                <p>{isLoading ? "Generating..." : "Generate Ideas"}</p>
+                Ideas
+              </button>
+              <button 
+                className={`sidebar-tab ${activeTab === 'post' ? 'active' : ''}`}
+                onClick={() => setActiveTab('post')}
+              >
+                Post to Substack
               </button>
             </div>
-            <div className="sidebar-ideas-container">
-              {ideas.map((idea) => (
-                <div
-                  key={idea.id}
-                  className="sidebar-idea-item"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedIdea(idea);
-                  }}
-                >
-                  {idea.title}
+            
+            {activeTab === 'ideas' && (
+              <>
+                <div className="sidebar-content-wrapper">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleGenerateIdeas();
+                    }}
+                    disabled={isLoading}
+                    className="generate-button"
+                  >
+                    <p>{isLoading ? "Generating..." : "Generate Ideas"}</p>
+                  </button>
                 </div>
-              ))}
-            </div>
+                <div className="sidebar-ideas-container">
+                  {ideas.map((idea) => (
+                    <div
+                      key={idea.id}
+                      className="sidebar-idea-item"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedIdea(idea);
+                      }}
+                    >
+                      {idea.title}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            
+            {activeTab === 'post' && (
+              <div className="sidebar-post-container">
+                <SubstackPoster />
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
