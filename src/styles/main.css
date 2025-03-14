@@ -1,0 +1,9 @@
+/* Base styles */
+:root {
+  --ext-background: #121212;
+  --ext-foreground: #ffffff;
+  --ext-border: #2d2d2d;
+  --ext-gray-400: #9ca3af;
+  --ext-gray-500: #6b7280;
+  --ext-gray-800: #1f2937;
+}
