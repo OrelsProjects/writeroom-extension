@@ -1,7 +1,6 @@
 // src/content/contentScript.tsx
 import ReactDOM from "react-dom";
 import "@/styles/main.css";
-import Content from "@/content/content";
 import { Idea } from "@/types/idea";
 
 const hostId = "my-extension-host";
@@ -35,11 +34,8 @@ if (!shadow.querySelector("link[href*='main.css']")) {
 
   styleLink.rel = "stylesheet";
   styleLink.href = chrome.runtime.getURL("styles/main.css");
-  console.log(chrome.runtime.getURL("styles/main.css"));
   shadow.appendChild(styleLink);
 }
-
-ReactDOM.render(<Content />, container);
 
 // Example of how to communicate with the background script
 export async function generateIdeas(): Promise<Idea[]> {
@@ -74,3 +70,42 @@ export async function getSession() {
     });
   });
 }
+
+// Function to create a post on Substack
+export async function createSubstackPost(
+  message: string,
+  scheduleSeconds: number = 0,
+  autoCloseTab: boolean = true
+): Promise<any> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      {
+        type: "API_REQUEST",
+        action: "createSubstackPost",
+        params: [message, scheduleSeconds, autoCloseTab],
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+          return;
+        }
+        if (response.success) {
+          resolve(response.data);
+        } else {
+          reject(response.error);
+        }
+      }
+    );
+  });
+}
+
+window.addEventListener("message", function (event) {
+  console.log("Message from content script:", event);
+  if (event.source !== window) return; // we only care about messages from our own page
+  if (!event.data) return;
+
+  // Now forward it to the background script
+  chrome.runtime.sendMessage(event.data, function (response) {
+    console.log("Background script responded:", response);
+  });
+});

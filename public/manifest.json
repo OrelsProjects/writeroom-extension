@@ -1,17 +1,17 @@
 {
-  "name": "Substack AI",
+  "name": "WriteRoom",
   "version": "1.0.0",
-  "description": "A chrome extension that allows Orel face to float on your screen.",
+  "description": "Substack Management Tool",
   "manifest_version": 3,
   "icons": {
-    "128": "128.png",
     "16": "16.png",
-    "32": "32.png"
+    "32": "32.png",
+    "128": "128.png"
   },
   "content_scripts": [
     {
       "js": ["assets/contentScript.js"],
-      "matches": ["https://*.substack.com/publish/post/*", "https://*.substack.com/*"],
+      "matches": ["https://*.substack.com/*"],
       "run_at": "document_end"
     }
   ],
@@ -19,18 +19,8 @@
     "service_worker": "assets/background.js",
     "type": "module"
   },
-  "web_accessible_resources": [
-    {
-      "resources": ["assets/*", "styles/*"],
-      "matches": ["<all_urls>"]
-    }
-  ],
-  "permissions": [
-    "cookies", 
-    "storage", 
-    "scripting", 
-    "tabs", 
-    "activeTab"
-  ],
-  "host_permissions": ["http://localhost:3000/*", "https://*.substack.com/*"]
+  "host_permissions": ["http://localhost:3000/*", "https://*.substack.com/*"],
+  "externally_connectable": {
+    "matches": ["http://localhost:*/*", "https://*.writeroom.co/*"]
+  }
 }
