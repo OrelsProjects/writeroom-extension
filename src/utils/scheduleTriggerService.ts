@@ -50,11 +50,7 @@ export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
     if (response.attachmentUrls && response.attachmentUrls.length > 0) {
       try {
         console.log("Preparing attachments", response.attachmentUrls);
-        attachments = await prepareAttachmentsForNote(
-          response.attachmentUrls,
-          schedule.userId,
-          schedule.scheduleId
-        );
+        attachments = await prepareAttachmentsForNote(response.attachmentUrls);
       } catch (error) {
         console.error(
           `Failed to prepare attachments for schedule ${schedule.scheduleId}:`,
