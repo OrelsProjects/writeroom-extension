@@ -101,7 +101,7 @@ export const debugLog = (message: string, ...args: any[]): void => {
  * @returns A promise that resolves when the post is created or scheduled
  */
 export const createSubstackPost = async (
-  message: string = "This is a test that was posted automatically with WriteRoom Chrome extension.",
+  message: string = "This is a test that was posted automatically with WriteStack Chrome extension.",
   scheduleSeconds: number = 0,
   autoCloseTab: boolean = true
 ): Promise<any> => {

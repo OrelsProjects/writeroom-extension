@@ -1,21 +1,28 @@
 // background.ts
-import { IdeaStatus } from "@/types/idea";
+import {
+  createSchedule,
+  deleteSchedule,
+  getSchedules,
+  Schedule,
+} from "../utils/scheduleUtils";
+import { handleScheduleTrigger } from "../utils/scheduleTriggerService";
+import { NoteDraftImage, prepareAttachmentsForNote } from "../utils/imageUtils";
 
 // Base URL for API requests
-const API_BASE_URL = "http://localhost:3000";
+const API_BASE_URL = "https://www.writestack.io";
 
-// Queue for scheduled posts
-interface ScheduledPost {
-  id: string;
+interface Response<T> {
   message: string;
-  scheduledTime: number;
-  status: "pending" | "processing" | "completed" | "failed";
-  error?: string;
-  autoCloseTab?: boolean;
+  action: string;
+  result: T;
 }
 
-// Store posts in chrome.storage for persistence across extension reloads
-let scheduledPosts: ScheduledPost[] = [];
+// Image upload result interface
+interface ImageUploadResult {
+  url: string;
+  success: boolean;
+  attachmentId?: string;
+}
 
 // Enhanced logging function
 function logScheduledPost(message: string, data?: any) {
@@ -23,148 +30,88 @@ function logScheduledPost(message: string, data?: any) {
   console.log(`[SCHEDULED POST ${timestamp}] ${message}`, data ? data : "");
 }
 
-async function makeAuthenticatedRequest(
-  endpoint: string,
-  options: RequestInit = {}
-) {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    credentials: "include", // Include cookies automatically
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-  if (!response.ok) {
-    return null;
-  }
-
-  return response.json();
-}
-
 // Define API handler types
 type ApiHandlers = {
-  updateIdeaStatus: (
-    ideaId: string,
-    status: IdeaStatus | "favorite"
-  ) => Promise<any>;
-  updateIdeaContent: (
-    ideaId: string,
-    body: string,
-    title: string,
-    subtitle: string
-  ) => Promise<any>;
-  generateIdeas: (
-    topic?: string,
-    ideasCount?: number,
-    shouldSearch?: boolean
-  ) => Promise<any>;
-  improveText: (text: string, type: string, ideaId: string) => Promise<any>;
-  improveTitle: (
-    menuType: "title" | "subtitle",
-    improveType: string,
-    ideaId: string,
-    value: string
-  ) => Promise<any>;
-  createNewIdea: () => Promise<any>;
-  generateIdeasTest: () => Promise<any>;
   createSubstackPost: (
     message?: string,
     scheduleSeconds?: number,
     autoCloseTab?: boolean
-  ) => Promise<any>;
-
+  ) => Promise<Response<any>>;
+  getSubstackCookies: () => Promise<Response<string>>;
+  setSubstackCookies: () => Promise<Response<any>>;
+  createSchedule: (
+    scheduleId: string,
+    userId: string,
+    timestamp: number
+  ) => Promise<Response<Schedule>>;
+  deleteSchedule: (scheduleId: string) => Promise<Response<boolean>>;
+  getSchedules: () => Promise<Response<Schedule[]>>;
+  uploadImagesToSubstack: (imageUrls: string[]) => Promise<Response<ImageUploadResult[]>>;
 };
 
 // API request handlers
 const apiHandlers: ApiHandlers = {
-  // Idea status update
-  updateIdeaStatus: async (ideaId: string, status: IdeaStatus | "favorite") => {
-    const searchParamsStatus =
-      status === "favorite" ? "isFavorite=true" : `status=${status}`;
-    return makeAuthenticatedRequest(
-      `/api/idea/${ideaId}/status?${searchParamsStatus}`,
-      {
-        method: "PATCH",
-      }
-    );
-  },
+  getSubstackCookies: async (): Promise<Response<string>> => {
+    return new Promise((resolve, reject) => {
+      chrome.cookies.getAll({ domain: "substack.com" }, (cookies) => {
+        if (chrome.runtime.lastError) {
+          console.error("Error fetching cookies:", chrome.runtime.lastError);
+          reject(chrome.runtime.lastError.message);
+          return;
+        }
 
-  // Idea content update
-  updateIdeaContent: async (
-    ideaId: string,
-    body: string,
-    title: string,
-    subtitle: string
-  ) => {
-    return makeAuthenticatedRequest(`/api/idea/${ideaId}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        body,
-        title,
-        subtitle,
-      }),
+        if (!cookies || cookies.length === 0) {
+          console.warn("No Substack cookies found.");
+          resolve({
+            message: "No Substack cookies found.",
+            action: "SUBSTACK_COOKIES_FETCHED",
+            result: "",
+          });
+          return;
+        }
+
+        // Only keep relevant cookies
+        const relevantCookieNames = ["substack.sid", "__cf_bm", "substack.lli"];
+        console.log("Cookies:", cookies);
+        const relevantCookies = cookies.filter((c) =>
+          relevantCookieNames.includes(c.name)
+        );
+
+        if (relevantCookies.length === 0) {
+          console.warn("No relevant Substack auth cookies found.");
+          resolve({
+            message: "No relevant Substack auth cookies found.",
+            action: "SUBSTACK_COOKIES_FETCHED",
+            result: "",
+          });
+          return;
+        }
+
+        const cookieDetails = relevantCookies.map((cookie) => ({
+          name: cookie.name,
+          value: cookie.value,
+          expiresAt: cookie.expirationDate || null,
+          domain: cookie.domain,
+          path: cookie.path,
+          secure: cookie.secure,
+          httpOnly: cookie.httpOnly,
+          sameSite: cookie.sameSite || "unspecified",
+        }));
+
+        const result = JSON.stringify(cookieDetails);
+
+        resolve({
+          message: "Cookies fetched successfully",
+          action: "SUBSTACK_COOKIES_FETCHED",
+          result: result,
+        });
+      });
     });
-  },
-
-  // Generate ideas
-  generateIdeas: async (
-    topic: string = "",
-    ideasCount: number = 3,
-    shouldSearch: boolean = false
-  ) => {
-    return makeAuthenticatedRequest(
-      `/api/post/generate/ideas?topic=${topic}&ideasCount=${ideasCount}&shouldSearch=${shouldSearch}`
-    );
-  },
-
-  // Improve text
-  improveText: async (text: string, type: string, ideaId: string) => {
-    return makeAuthenticatedRequest("/api/post/improve", {
-      method: "POST",
-      body: JSON.stringify({
-        text,
-        type,
-        ideaId,
-      }),
-    });
-  },
-
-  // Improve title or subtitle
-  improveTitle: async (
-    menuType: "title" | "subtitle",
-    improveType: string,
-    ideaId: string,
-    value: string
-  ) => {
-    return makeAuthenticatedRequest("/api/post/improve/title", {
-      method: "POST",
-      body: JSON.stringify({
-        menuType,
-        improveType,
-        ideaId,
-        value,
-      }),
-    });
-  },
-
-  // Create new idea
-  createNewIdea: async () => {
-    return makeAuthenticatedRequest("/api/idea", {
-      method: "POST",
-    });
-  },
-
-  // Test idea generation (legacy handler)
-  generateIdeasTest: async () => {
-    return makeAuthenticatedRequest("/api/post/generate/ideas-test");
   },
 
   // Create a post on Substack
   createSubstackPost: async (bodyJson: any) => {
     try {
-      // if bodyjson is not a string, stringify it
       const body =
         typeof bodyJson === "string" ? bodyJson : JSON.stringify(bodyJson);
 
@@ -172,12 +119,22 @@ const apiHandlers: ApiHandlers = {
         headers: {
           "content-type": "application/json",
           Referer: "https://substack.com/home",
-          "Referrer-Policy": "strict-origin-when-cross-origin",
         },
         body,
         method: "POST",
       });
       const data = await response.json();
+      if (!response.ok) {
+        console.log("Response:", response);
+        console.log("Data:", data);
+        return {
+          message: "Failed to create post",
+          action: "SUBSTACK_POST_CREATED",
+          result: JSON.stringify({ error: "Failed to create post" }),
+        };
+      }
+      console.log("Response:", response);
+      console.log("Data after post sent:", data);
       return {
         message: "Post created successfully",
         action: "SUBSTACK_POST_CREATED",
@@ -189,6 +146,168 @@ const apiHandlers: ApiHandlers = {
       logScheduledPost("Error creating Substack post", { error: errorMessage });
       console.error("Error creating Substack post:", error);
       throw error;
+    }
+  },
+
+  setSubstackCookies: async () => {
+    const response = await apiHandlers.getSubstackCookies();
+    const parsedCookies = JSON.parse(response.result);
+    console.log("Sending to server:", JSON.stringify(parsedCookies));
+
+    try {
+      const cookiesResponse = await fetch(`${API_BASE_URL}/api/user/cookies`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(parsedCookies),
+      });
+      if (!cookiesResponse.ok) {
+        console.error("Failed to send cookies to server");
+        return response;
+      }
+      const data = await cookiesResponse.json();
+      console.log("Cookies sent to server successfully" + data);
+      return response;
+    } catch (error) {
+      console.error("Error sending cookies to server:", error);
+      return response;
+    }
+  },
+
+  // Create a new schedule
+  createSchedule: async (
+    scheduleId: string,
+    userId: string,
+    timestamp: number
+  ): Promise<Response<Schedule>> => {
+    try {
+      // Create schedule in extension storage
+      console.log("Creating schedule", scheduleId, userId, timestamp);
+      const schedule = await createSchedule(scheduleId, userId, timestamp);
+      console.log("Schedule created successfully", schedule);
+      return {
+        message: "Schedule created successfully",
+        action: "SCHEDULE_CREATED",
+        result: schedule,
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error("Error creating schedule:", errorMessage);
+      throw error;
+    }
+  },
+
+  deleteSchedule: async (scheduleId: string): Promise<Response<boolean>> => {
+    try {
+      // Delete schedule from extension storage
+      const result = await deleteSchedule(scheduleId);
+      return {
+        message: result
+          ? "Schedule deleted successfully"
+          : "Schedule not found",
+        action: "SCHEDULE_DELETED",
+        result,
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error("Error deleting schedule:", errorMessage);
+      throw error;
+    }
+  },
+
+  // Get all schedules
+  getSchedules: async (): Promise<Response<Schedule[]>> => {
+    try {
+      // Get schedules from extension storage
+      const schedules = await getSchedules();
+      return {
+        message: `Found ${schedules.length} schedules`,
+        action: "SCHEDULES_FETCHED",
+        result: schedules,
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error("Error getting schedules:", errorMessage);
+      throw error;
+    }
+  },
+
+  // Upload multiple images to Substack
+  uploadImagesToSubstack: async (
+    imageUrls: string[]
+  ): Promise<Response<ImageUploadResult[]>> => {
+    console.log("Uploading images to Substack:", imageUrls);
+
+    if (!imageUrls || !imageUrls.length) {
+      return {
+        message: "No images to upload",
+        action: "IMAGES_UPLOADED",
+        result: [],
+      };
+    }
+
+    // Process each image URL, tracking results
+    const results: ImageUploadResult[] = [];
+
+    try {
+      // Use prepareAttachmentsForNote to process all images
+      const attachments = await prepareAttachmentsForNote(imageUrls);
+
+      // Create result entries for successful uploads
+      const successfulUploads = new Map<string, NoteDraftImage>();
+      attachments.forEach((attachment) => {
+        successfulUploads.set(attachment.url, attachment);
+      });
+
+      // Create result for each original URL
+      for (const imageUrl of imageUrls) {
+        const attachment = successfulUploads.get(imageUrl);
+
+        if (attachment) {
+          results.push({
+            url: imageUrl,
+            success: true,
+            attachmentId: attachment.id,
+          });
+        } else {
+          results.push({
+            url: imageUrl,
+            success: false,
+          });
+        }
+      }
+
+      return {
+        message: `Successfully uploaded ${attachments.length} of ${imageUrls.length} images`,
+        action: "IMAGES_UPLOADED",
+        result: results,
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error("Error uploading images to Substack:", errorMessage);
+
+      // For any remaining URLs not in results, add failed entries
+      const processedUrls = new Set(results.map((r) => r.url));
+
+      for (const imageUrl of imageUrls) {
+        if (!processedUrls.has(imageUrl)) {
+          results.push({
+            url: imageUrl,
+            success: false,
+          });
+        }
+      }
+
+      return {
+        message: `Error uploading images: ${errorMessage}`,
+        action: "IMAGES_UPLOADED",
+        result: results,
+      };
     }
   },
 };
@@ -212,51 +331,53 @@ function callApiHandler(
   params: unknown[] = []
 ): Promise<any> {
   switch (action) {
-    case "updateIdeaStatus":
-      return apiHandlers.updateIdeaStatus(
-        params[0] as string,
-        params[1] as IdeaStatus | "favorite"
-      );
-    case "updateIdeaContent":
-      return apiHandlers.updateIdeaContent(
-        params[0] as string,
-        params[1] as string,
-        params[2] as string,
-        params[3] as string
-      );
-    case "generateIdeas":
-      return apiHandlers.generateIdeas(
-        params[0] as string | undefined,
-        params[1] as number | undefined,
-        params[2] as boolean | undefined
-      );
-    case "improveText":
-      return apiHandlers.improveText(
-        params[0] as string,
-        params[1] as string,
-        params[2] as string
-      );
-    case "improveTitle":
-      return apiHandlers.improveTitle(
-        params[0] as "title" | "subtitle",
-        params[1] as string,
-        params[2] as string,
-        params[3] as string
-      );
-    case "createNewIdea":
-      return apiHandlers.createNewIdea();
-    case "generateIdeasTest":
-      return apiHandlers.generateIdeasTest();
+    case "getSubstackCookies":
+      return apiHandlers.getSubstackCookies();
+    case "setSubstackCookies":
+      return apiHandlers.setSubstackCookies();
     case "createSubstackPost":
       return apiHandlers.createSubstackPost(
         params[0] as string | undefined,
         params[1] as number | undefined,
         params[2] as boolean | undefined
       );
+    case "createSchedule":
+      return apiHandlers.createSchedule(
+        params[0] as string,
+        params[1] as string,
+        params[2] as number
+      );
+    case "deleteSchedule":
+      return apiHandlers.deleteSchedule(params[0] as string);
+    case "getSchedules":
+      return apiHandlers.getSchedules();
+    case "uploadImagesToSubstack":
+      return apiHandlers.uploadImagesToSubstack(params[0] as string[]);
     default:
       return Promise.reject(new Error(`Unknown action: ${action}`));
   }
 }
+
+// Set up alarm listener for schedule triggers
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  console.log(`Alarm triggered: ${alarm.name}`);
+
+  // Check if this is a schedule alarm
+  const schedules = await getSchedules();
+  const schedule = schedules.find((s) => s.scheduleId === alarm.name);
+
+  if (schedule) {
+    console.log(`Processing schedule: ${schedule.scheduleId}`);
+    try {
+      await handleScheduleTrigger(schedule);
+
+      // Delete the schedule after processing
+      await deleteSchedule(schedule.scheduleId);
+    } catch (error) {
+      console.error(`Error handling schedule ${schedule.scheduleId}:`, error);
+    }
+  }
+});
 
 chrome.runtime.onMessageExternal.addListener(
   (request: ChromeMessage, sender, sendResponse) => {
@@ -264,17 +385,20 @@ chrome.runtime.onMessageExternal.addListener(
       "Background script received external message:",
       request,
       "from:",
-      sender.url,
+      sender?.url,
       "Type: ",
-      request.type
+      request?.type
     );
 
     // Handle PING message - respond immediately without async
-    if (request.type === "PING") {
+    if (request?.type === "PING") {
       console.log("Received external PING, responding immediately");
+      const version = chrome.runtime.getManifest().version;
+      console.log("Version:", version);
       sendResponse({
         success: true,
         timestamp: Date.now(),
+        version,
         message: "Extension is active",
         source: "external",
       });
@@ -282,7 +406,7 @@ chrome.runtime.onMessageExternal.addListener(
     }
 
     // Handle API requests
-    if (request.type === "API_REQUEST") {
+    if (request?.type === "API_REQUEST") {
       const { action, params } = request;
       console.log("Received API request:", action, params);
       if (action) {
@@ -302,4 +426,100 @@ chrome.runtime.onMessageExternal.addListener(
   }
 );
 
-export { makeAuthenticatedRequest };
+chrome.runtime.onMessage.addListener(
+  (request: ChromeMessage, sender, sendResponse) => {
+    console.log("Background got internal message:", request);
+
+    if (request?.type === "PING") {
+      sendResponse({
+        success: true,
+        timestamp: Date.now(),
+        message: "Extension is active",
+        source: "internal",
+      });
+      return false;
+    }
+
+    if (request?.type === "API_REQUEST") {
+      const { action, params } = request;
+      console.log("API request:", action, params);
+
+      if (action) {
+        callApiHandler(action, params)
+          .then((data: any) => {
+            sendResponse({ success: true, data });
+          })
+          .catch((error: Error) => {
+            console.error(`Error in API request (${action}):`, error);
+            sendResponse({ success: false, error: error.message });
+          });
+
+        return true;
+      }
+    }
+
+    return false;
+  }
+);
+
+// Initialize the extension
+async function initializeExtension() {
+  console.log("Initializing extension...");
+
+  // Check for any pending schedules
+  const schedules = await getSchedules();
+  if (schedules.length > 0) {
+    console.log(`Found ${schedules.length} schedules`);
+
+    // Process any schedules that should have already been triggered
+    const now = Date.now();
+    const pastSchedules = schedules.filter((s) => s.timestamp <= now);
+
+    if (pastSchedules.length > 0) {
+      console.log(`Processing ${pastSchedules.length} past schedules`);
+
+      for (const schedule of pastSchedules) {
+        try {
+          await handleScheduleTrigger(schedule);
+          await deleteSchedule(schedule.scheduleId);
+        } catch (error) {
+          console.error(
+            `Error handling past schedule ${schedule.scheduleId}:`,
+            error
+          );
+        }
+      }
+    }
+
+    // Set up alarms for future schedules
+    const futureSchedules = schedules.filter((s) => s.timestamp > now);
+    if (futureSchedules.length > 0) {
+      console.log(
+        `Setting up alarms for ${futureSchedules.length} future schedules`
+      );
+
+      for (const schedule of futureSchedules) {
+        try {
+          await chrome.alarms.create(schedule.scheduleId, {
+            when: schedule.timestamp,
+          });
+          console.log(
+            `Alarm created for schedule ${schedule.scheduleId} at ${new Date(
+              schedule.timestamp
+            ).toISOString()}`
+          );
+        } catch (error) {
+          console.error(
+            `Error creating alarm for schedule ${schedule.scheduleId}:`,
+            error
+          );
+        }
+      }
+    }
+  }
+}
+
+// Run initialization
+initializeExtension().catch((error) => {
+  console.error("Error initializing extension:", error);
+});

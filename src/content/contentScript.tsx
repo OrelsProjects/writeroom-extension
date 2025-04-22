@@ -34,6 +34,7 @@ if (!shadow.querySelector("link[href*='main.css']")) {
 
   styleLink.rel = "stylesheet";
   styleLink.href = chrome.runtime.getURL("styles/main.css");
+  console.log(chrome.runtime.getURL("styles/main.css"));
   shadow.appendChild(styleLink);
 }
 
@@ -109,3 +110,39 @@ window.addEventListener("message", function (event) {
     console.log("Background script responded:", response);
   });
 });
+
+console.log("Content script loaded");
+
+(async () => {
+  try {
+    console.log(
+      "Substack detected. Time to grab cookies like a raccoon in a dumpster."
+    );
+
+    await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(
+        { type: "API_REQUEST", action: "setSubstackCookies" },
+        (response) => {
+          console.log("Response from setSubstackCookies:", response);
+          if (chrome.runtime.lastError) {
+            console.error(
+              "Error from setSubstackCookies:",
+              chrome.runtime.lastError
+            );
+            reject(chrome.runtime.lastError.message);
+            return;
+          }
+          if (response?.success) {
+            resolve(response.data.result); // it's a JSON string
+          } else {
+            reject(response?.error || "Failed to get cookies");
+          }
+        }
+      );
+    });
+
+    console.log("Cookies sent to WriteStack successfully");
+  } catch (err) {
+    console.error("Something went sideways:", err);
+  }
+})();

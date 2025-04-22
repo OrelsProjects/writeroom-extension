@@ -1,12 +1,12 @@
 {
-  "name": "WriteRoom",
-  "version": "1.0.0",
-  "description": "Substack Management Tool",
+  "name": "WriteStack",
+  "version": "1.2.5",
+  "description": "Helps users manage and schedule their Substack posts.",
   "manifest_version": 3,
   "icons": {
-    "128": "128.png",
     "16": "16.png",
-    "32": "32.png"
+    "32": "32.png",
+    "128": "128.png"
   },
   "content_scripts": [
     {
@@ -19,8 +19,28 @@
     "service_worker": "assets/background.js",
     "type": "module"
   },
-  "host_permissions": ["http://localhost:3000/*", "https://*.substack.com/*"],
+  "permissions": ["cookies", "storage", "alarms"],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "https://*.substack.com/*",
+    "https://*.writeroom.co/*",
+    "https://*.writestack.io/*",
+    "https://4a0e-93-173-75-216.ngrok-free.app/*",
+    "https://writeroom-app-dev.s3.us-east-1.amazonaws.com/*"
+  ],
   "externally_connectable": {
-    "matches": ["http://localhost:*/*", "https://*.writeroom.co/*"]
-  }
+    "matches": [
+      "http://localhost:*/*",
+      "https://*.writeroom.co/*",
+      "https://*.writestack.io/*",
+      "https://*.substack.com/*",
+      "https://4a0e-93-173-75-216.ngrok-free.app/*"
+    ]
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/*", "styles/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

@@ -17,7 +17,7 @@ interface ScheduledPost {
  * A component that allows posting to Substack directly from the extension
  */
 const SubstackPoster: React.FC = () => {
-  const [message, setMessage] = useState("This is a test that was posted automatically with WriteRoom Chrome extension.");
+  const [message, setMessage] = useState("This is a test that was posted automatically with WriteStack Chrome extension.");
   const [isPosting, setIsPosting] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
   const [status, setStatus] = useState<string | null>(null);
