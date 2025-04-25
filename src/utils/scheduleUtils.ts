@@ -6,8 +6,8 @@ export interface Schedule {
   userId: string;
   timestamp: number;
   substackNoteId?: string;
+  isProcessing?: boolean;
 }
-
 // Storage key for schedules
 const SCHEDULES_STORAGE_KEY = "writestack_schedules";
 
@@ -111,7 +111,7 @@ export async function getSchedules(): Promise<Schedule[]> {
  * @param schedules Array of schedules to save
  * @returns Promise that resolves when schedules are saved
  */
-async function saveSchedules(schedules: Schedule[]): Promise<void> {
+export async function saveSchedules(schedules: Schedule[]): Promise<void> {
   try {
     console.log("Saving schedules", schedules);
     await chrome.storage.local.set({ [SCHEDULES_STORAGE_KEY]: schedules });
@@ -121,6 +121,29 @@ async function saveSchedules(schedules: Schedule[]): Promise<void> {
   }
 }
 
+// /**
+//  * Finds all duplicate alarms and removes them
+//  * @param schedule
+//  */
+// async function clearDuplicateAlarms(): Promise<void> {
+//   try {
+//     console.log("Clearing duplicate alarms");
+//     const allAlarms = await chrome.alarms.getAll();
+//     // go over all alarms and remove duplicates
+//     for (const alarm of allAlarms) {
+//       const duplicateAlarm = allAlarms.find(
+//         (a) => a.name === alarm.name && a.scheduledTime === alarm.scheduledTime
+//       );
+//       if (duplicateAlarm) {
+//         console.log("Clearing duplicate alarm", duplicateAlarm.name);
+//         await chrome.alarms.clear(duplicateAlarm.name);
+//       }
+//     }
+//   } catch (error) {
+//     console.error("Failed to clear duplicate alarms:", error);
+//   }
+// }
+
 /**
  * Create a Chrome alarm for a schedule
  * @param schedule Schedule to create alarm for
@@ -128,9 +151,16 @@ async function saveSchedules(schedules: Schedule[]): Promise<void> {
 async function createAlarmForSchedule(schedule: Schedule): Promise<void> {
   try {
     // Create alarm with schedule ID as name
+    console.log("Creating alarm for schedule", schedule.scheduleId);
+    const allAlarms = await chrome.alarms.getAll();
+    if (allAlarms.find((a) => a.name === schedule.scheduleId)) {
+      console.log("Alarm already exists for schedule", schedule.scheduleId);
+      return;
+    }
     chrome.alarms.create(schedule.scheduleId, {
       when: schedule.timestamp,
     });
+    // await clearDuplicateAlarms();
     console.log(
       `Alarm created for schedule ${schedule.scheduleId} at ${new Date(
         schedule.timestamp

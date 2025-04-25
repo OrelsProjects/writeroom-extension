@@ -1,16 +1,12 @@
 import { makeAuthenticatedRequest } from "@/utils/request";
 import { NoteDraftImage, prepareAttachmentsForNote } from "./imageUtils";
-import { Schedule } from "./scheduleUtils";
+import { getSchedules, saveSchedules, Schedule } from "./scheduleUtils";
 
 // API endpoint for schedule triggers
 const getScheduleTriggerAPI = (scheduleId: string) =>
   `api/v1/extension/schedule/${scheduleId}/triggered`;
 const getScheduleAPI = (scheduleId: string) =>
   `api/v1/extension/schedule/${scheduleId}`;
-// const getScheduleTriggerAPI = (scheduleId: string) =>
-//   `https://www.writestack.io/api/v1/extension/schedule/${scheduleId}/triggered`;
-// const getScheduleAPI = (scheduleId: string) =>
-//   `https://www.writestack.io/api/v1/extension/schedule/${scheduleId}`;
 // TODO: Make sure that if writestack.io is open, open a new Substack tab to send the post.
 
 // Response from the API when a schedule is triggered
@@ -34,7 +30,22 @@ interface PostToSubstackResult {
 export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
   console.log(`Handling triggered schedule: ${schedule.scheduleId}`);
 
+  const schedules = await getSchedules();
+  const freshSchedule = schedules.find(
+    (s) => s.scheduleId === schedule.scheduleId
+  );
+  if (!freshSchedule || freshSchedule.isProcessing) {
+    console.warn(`Skipping already processing schedule ${schedule.scheduleId}`);
+    return;
+  }
   try {
+    // update the schedule as processing
+    freshSchedule.isProcessing = true;
+    await saveSchedules([
+      ...schedules.filter((s) => s.scheduleId !== schedule.scheduleId),
+      freshSchedule,
+    ]);
+
     // Notify the API that a schedule has been triggered
     const response = await getSchedule(schedule.scheduleId);
     console.log("getSchedule response", response);
@@ -117,6 +128,13 @@ export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
       "GENERAL_ERROR",
       String(error)
     );
+  } finally {
+    // update the schedule as not processing
+    freshSchedule.isProcessing = false;
+    await saveSchedules([
+      ...schedules.filter((s) => s.scheduleId !== schedule.scheduleId),
+      freshSchedule,
+    ]);
   }
 }
 
@@ -137,8 +155,7 @@ async function getSchedule(
         headers: {
           "Content-Type": "application/json",
         },
-      },
-      "http://localhost:3000"
+      }
     );
 
     if (!schedule || !schedule.success) {
@@ -185,8 +202,7 @@ async function notifyScheduleTrigger(
       {
         method: "POST",
         body: JSON.stringify(body),
-      },
-      "http://localhost:3000"
+      }
     );
 
     if (!response || !response.success) {

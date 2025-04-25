@@ -358,6 +358,8 @@ function callApiHandler(
   }
 }
 
+let isSending = false;
+
 // Set up alarm listener for schedule triggers
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   console.log(`Alarm triggered: ${alarm.name}`);
@@ -473,23 +475,23 @@ async function initializeExtension() {
 
     // Process any schedules that should have already been triggered
     const now = Date.now();
-    const pastSchedules = schedules.filter((s) => s.timestamp <= now);
+    // const pastSchedules = schedules.filter((s) => s.timestamp <= now);
 
-    if (pastSchedules.length > 0) {
-      console.log(`Processing ${pastSchedules.length} past schedules`);
+    // if (pastSchedules.length > 0) {
+    //   console.log(`Processing ${pastSchedules.length} past schedules`);
 
-      for (const schedule of pastSchedules) {
-        try {
-          await handleScheduleTrigger(schedule);
-          await deleteSchedule(schedule.scheduleId);
-        } catch (error) {
-          console.error(
-            `Error handling past schedule ${schedule.scheduleId}:`,
-            error
-          );
-        }
-      }
-    }
+    //   for (const schedule of pastSchedules) {
+    //     try {
+    //       await handleScheduleTrigger(schedule);
+    //       await deleteSchedule(schedule.scheduleId);
+    //     } catch (error) {
+    //       console.error(
+    //         `Error handling past schedule ${schedule.scheduleId}:`,
+    //         error
+    //       );
+    //     }
+    //   }
+    // }
 
     // Set up alarms for future schedules
     const futureSchedules = schedules.filter((s) => s.timestamp > now);
@@ -500,7 +502,7 @@ async function initializeExtension() {
 
       for (const schedule of futureSchedules) {
         try {
-          await chrome.alarms.create(schedule.scheduleId, {
+          chrome.alarms.create(schedule.scheduleId, {
             when: schedule.timestamp,
           });
           console.log(
