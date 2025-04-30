@@ -1,4 +1,5 @@
 // src/utils/imageUtils.ts
+import { log, logError } from "./logger";
 
 // Interface for Substack image returned from API
 export interface NoteDraftImage {
@@ -25,7 +26,7 @@ export async function downloadImage(url: string): Promise<Uint8Array | null> {
     const response = await fetch(url);
     if (!response.ok) {
       const responseText = await response.text();
-      console.error(
+      logError(
         `Failed to fetch image from ${url}, got status: ${response.status}, response: ${responseText}`
       );
       return null;
@@ -34,7 +35,7 @@ export async function downloadImage(url: string): Promise<Uint8Array | null> {
     const arrayBuffer = await response.arrayBuffer();
     return new Uint8Array(arrayBuffer);
   } catch (error) {
-    console.error(`Error downloading image from ${url}:`, error);
+    logError(`Error downloading image from ${url}:`, error);
     return null;
   }
 }
@@ -58,7 +59,7 @@ export async function uploadImageSubstack(
     const base64 = arrayBufferToBase64(image);
     const dataUri = `data:image/png;base64,${base64}`;
 
-    console.log("Uploading image to Substack", dataUri);
+    log("Uploading image to Substack", dataUri);
 
     // Upload image to Substack
     const uploadImageResponse = await fetch(
@@ -76,7 +77,7 @@ export async function uploadImageSubstack(
 
     if (!uploadImageResponse.ok) {
       const responseText = await uploadImageResponse.text();
-      console.error(`Failed to upload image to Substack: ${responseText}`);
+      logError(`Failed to upload image to Substack: ${responseText}`);
       throw new Error("Failed to upload image to Substack");
     }
 
@@ -98,7 +99,7 @@ export async function uploadImageSubstack(
 
     if (!getImageResponse.ok) {
       const responseText = await getImageResponse.text();
-      console.error(`Failed to get image from Substack: ${responseText}`);
+      logError(`Failed to get image from Substack: ${responseText}`);
       throw new Error("Failed to get image from Substack");
     }
 
@@ -110,10 +111,10 @@ export async function uploadImageSubstack(
       url: imageData.imageUrl,
     };
 
-    console.log(`Image uploaded to Substack: ${noteDraftImage.id}`);
+    log(`Image uploaded to Substack: ${noteDraftImage.id}`);
     return noteDraftImage;
   } catch (error) {
-    console.error("Error uploading image to Substack:", error);
+    logError("Error uploading image to Substack:", error);
     throw new Error("Failed to upload image to Substack");
   }
 }
@@ -151,24 +152,24 @@ export async function prepareAttachmentsForNote(
   const attachmentsToUpload = urls.slice(0, maxAttachments);
   const attachments: NoteDraftImage[] = [];
 
-  console.log("Uploading attachments", attachmentsToUpload);
+  log("Uploading attachments", attachmentsToUpload);
 
   for (const url of attachmentsToUpload) {
     try {
       // Download the image
       const buffer = await downloadImage(url);
       if (!buffer) {
-        console.error(`Failed to download image from ${url}`);
+        logError(`Failed to download image from ${url}`);
         continue;
       }
 
-      console.log("Got buffer! with length", buffer.length);
+      log("Got buffer! with length", buffer.length);
 
       // Upload to Substack
       const substackImage = await uploadImageSubstack(buffer);
       attachments.push(substackImage);
     } catch (error) {
-      console.error(`Error processing attachment from ${url}:`, error);
+      logError(`Error processing attachment from ${url}:`, error);
     }
   }
 

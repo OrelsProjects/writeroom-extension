@@ -1,5 +1,6 @@
 // background.ts
 import {
+  Alarm,
   createSchedule,
   deleteSchedule,
   getSchedules,
@@ -7,6 +8,7 @@ import {
 } from "../utils/scheduleUtils";
 import { handleScheduleTrigger } from "../utils/scheduleTriggerService";
 import { NoteDraftImage, prepareAttachmentsForNote } from "../utils/imageUtils";
+import { log, logError } from "../utils/logger";
 
 // Base URL for API requests
 const API_BASE_URL = "https://www.writestack.io";
@@ -45,8 +47,12 @@ type ApiHandlers = {
     timestamp: number
   ) => Promise<Response<Schedule>>;
   deleteSchedule: (scheduleId: string) => Promise<Response<boolean>>;
-  getSchedules: () => Promise<Response<Schedule[]>>;
-  uploadImagesToSubstack: (imageUrls: string[]) => Promise<Response<ImageUploadResult[]>>;
+  getSchedules: () => Promise<
+    Response<{ schedules: Schedule[]; alarms: Alarm[] }>
+  >;
+  uploadImagesToSubstack: (
+    imageUrls: string[]
+  ) => Promise<Response<ImageUploadResult[]>>;
 };
 
 // API request handlers
@@ -55,7 +61,7 @@ const apiHandlers: ApiHandlers = {
     return new Promise((resolve, reject) => {
       chrome.cookies.getAll({ domain: "substack.com" }, (cookies) => {
         if (chrome.runtime.lastError) {
-          console.error("Error fetching cookies:", chrome.runtime.lastError);
+          logError("Error fetching cookies:", chrome.runtime.lastError);
           reject(chrome.runtime.lastError.message);
           return;
         }
@@ -72,7 +78,7 @@ const apiHandlers: ApiHandlers = {
 
         // Only keep relevant cookies
         const relevantCookieNames = ["substack.sid", "__cf_bm", "substack.lli"];
-        console.log("Cookies:", cookies);
+        log("Cookies:", cookies);
         const relevantCookies = cookies.filter((c) =>
           relevantCookieNames.includes(c.name)
         );
@@ -119,22 +125,24 @@ const apiHandlers: ApiHandlers = {
         headers: {
           "content-type": "application/json",
           Referer: "https://substack.com/home",
+          // Origin: "https://substack.com",
         },
+        // credentials: "include", // Required to send cookies
         body,
         method: "POST",
       });
       const data = await response.json();
       if (!response.ok) {
-        console.log("Response:", response);
-        console.log("Data:", data);
+        log("Response:", response);
+        log("Data:", data);
         return {
           message: "Failed to create post",
           action: "SUBSTACK_POST_CREATED",
           result: JSON.stringify({ error: "Failed to create post" }),
         };
       }
-      console.log("Response:", response);
-      console.log("Data after post sent:", data);
+      log("Response:", response);
+      log("Data after post sent:", data);
       return {
         message: "Post created successfully",
         action: "SUBSTACK_POST_CREATED",
@@ -143,8 +151,8 @@ const apiHandlers: ApiHandlers = {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      logScheduledPost("Error creating Substack post", { error: errorMessage });
-      console.error("Error creating Substack post:", error);
+      log("Error creating Substack post", { error: errorMessage });
+      logError("Error creating Substack post:", error);
       throw error;
     }
   },
@@ -152,7 +160,7 @@ const apiHandlers: ApiHandlers = {
   setSubstackCookies: async () => {
     const response = await apiHandlers.getSubstackCookies();
     const parsedCookies = JSON.parse(response.result);
-    console.log("Sending to server:", JSON.stringify(parsedCookies));
+    log("Sending to server:", JSON.stringify(parsedCookies));
 
     try {
       const cookiesResponse = await fetch(`${API_BASE_URL}/api/user/cookies`, {
@@ -163,14 +171,14 @@ const apiHandlers: ApiHandlers = {
         body: JSON.stringify(parsedCookies),
       });
       if (!cookiesResponse.ok) {
-        console.error("Failed to send cookies to server");
+        logError("Failed to send cookies to server");
         return response;
       }
       const data = await cookiesResponse.json();
-      console.log("Cookies sent to server successfully" + data);
+      log("Cookies sent to server successfully", data);
       return response;
     } catch (error) {
-      console.error("Error sending cookies to server:", error);
+      logError("Error sending cookies to server:", error);
       return response;
     }
   },
@@ -183,9 +191,9 @@ const apiHandlers: ApiHandlers = {
   ): Promise<Response<Schedule>> => {
     try {
       // Create schedule in extension storage
-      console.log("Creating schedule", scheduleId, userId, timestamp);
+      log("Creating schedule", { scheduleId, userId, timestamp });
       const schedule = await createSchedule(scheduleId, userId, timestamp);
-      console.log("Schedule created successfully", schedule);
+      log("Schedule created successfully", schedule);
       return {
         message: "Schedule created successfully",
         action: "SCHEDULE_CREATED",
@@ -194,7 +202,7 @@ const apiHandlers: ApiHandlers = {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error("Error creating schedule:", errorMessage);
+      logError("Error creating schedule:", errorMessage);
       throw error;
     }
   },
@@ -213,25 +221,27 @@ const apiHandlers: ApiHandlers = {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error("Error deleting schedule:", errorMessage);
+      logError("Error deleting schedule:", errorMessage);
       throw error;
     }
   },
 
   // Get all schedules
-  getSchedules: async (): Promise<Response<Schedule[]>> => {
+  getSchedules: async (): Promise<
+    Response<{ schedules: Schedule[]; alarms: Alarm[] }>
+  > => {
     try {
       // Get schedules from extension storage
-      const schedules = await getSchedules();
+      const { schedules, alarms } = await getSchedules();
       return {
         message: `Found ${schedules.length} schedules`,
         action: "SCHEDULES_FETCHED",
-        result: schedules,
+        result: { schedules, alarms },
       };
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error("Error getting schedules:", errorMessage);
+      logError("Error getting schedules:", errorMessage);
       throw error;
     }
   },
@@ -240,7 +250,7 @@ const apiHandlers: ApiHandlers = {
   uploadImagesToSubstack: async (
     imageUrls: string[]
   ): Promise<Response<ImageUploadResult[]>> => {
-    console.log("Uploading images to Substack:", imageUrls);
+    log("Uploading images to Substack:", imageUrls);
 
     if (!imageUrls || !imageUrls.length) {
       return {
@@ -289,7 +299,7 @@ const apiHandlers: ApiHandlers = {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error("Error uploading images to Substack:", errorMessage);
+      logError("Error uploading images to Substack:", errorMessage);
 
       // For any remaining URLs not in results, add failed entries
       const processedUrls = new Set(results.map((r) => r.url));
@@ -362,41 +372,38 @@ let isSending = false;
 
 // Set up alarm listener for schedule triggers
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  console.log(`Alarm triggered: ${alarm.name}`);
+  log(`Alarm triggered: ${alarm.name}`);
 
   // Check if this is a schedule alarm
-  const schedules = await getSchedules();
+  const { schedules } = await getSchedules();
   const schedule = schedules.find((s) => s.scheduleId === alarm.name);
 
   if (schedule) {
-    console.log(`Processing schedule: ${schedule.scheduleId}`);
+    log(`Processing schedule: ${schedule.scheduleId}`);
     try {
       await handleScheduleTrigger(schedule);
 
       // Delete the schedule after processing
       await deleteSchedule(schedule.scheduleId);
     } catch (error) {
-      console.error(`Error handling schedule ${schedule.scheduleId}:`, error);
+      logError(`Error handling schedule ${schedule.scheduleId}:`, error);
     }
   }
 });
 
 chrome.runtime.onMessageExternal.addListener(
   (request: ChromeMessage, sender, sendResponse) => {
-    console.log(
-      "Background script received external message:",
+    log("Background script received external message:", {
       request,
-      "from:",
-      sender?.url,
-      "Type: ",
-      request?.type
-    );
+      sender: sender?.url,
+      type: request?.type,
+    });
 
     // Handle PING message - respond immediately without async
     if (request?.type === "PING") {
-      console.log("Received external PING, responding immediately");
+      log("Received external PING, responding immediately");
       const version = chrome.runtime.getManifest().version;
-      console.log("Version:", version);
+      log("Version:", version);
       sendResponse({
         success: true,
         timestamp: Date.now(),
@@ -410,14 +417,14 @@ chrome.runtime.onMessageExternal.addListener(
     // Handle API requests
     if (request?.type === "API_REQUEST") {
       const { action, params } = request;
-      console.log("Received API request:", action, params);
+      log("Received API request:", { action, params });
       if (action) {
         callApiHandler(action, params)
           .then((data: any) => {
             sendResponse({ success: true, data });
           })
           .catch((error: Error) => {
-            console.error(`Error in API request (${action}):`, error);
+            logError(`Error in API request (${action}):`, error);
             sendResponse({ success: false, error: error.message });
           });
         return true; // Will respond asynchronously
@@ -430,7 +437,7 @@ chrome.runtime.onMessageExternal.addListener(
 
 chrome.runtime.onMessage.addListener(
   (request: ChromeMessage, sender, sendResponse) => {
-    console.log("Background got internal message:", request);
+    log("Background got internal message:", request);
 
     if (request?.type === "PING") {
       sendResponse({
@@ -444,7 +451,7 @@ chrome.runtime.onMessage.addListener(
 
     if (request?.type === "API_REQUEST") {
       const { action, params } = request;
-      console.log("API request:", action, params);
+      log("API request:", { action, params });
 
       if (action) {
         callApiHandler(action, params)
@@ -452,7 +459,7 @@ chrome.runtime.onMessage.addListener(
             sendResponse({ success: true, data });
           })
           .catch((error: Error) => {
-            console.error(`Error in API request (${action}):`, error);
+            logError(`Error in API request (${action}):`, error);
             sendResponse({ success: false, error: error.message });
           });
 
@@ -466,12 +473,12 @@ chrome.runtime.onMessage.addListener(
 
 // Initialize the extension
 async function initializeExtension() {
-  console.log("Initializing extension...");
+  log("Initializing extension...");
 
   // Check for any pending schedules
-  const schedules = await getSchedules();
+  const { schedules, alarms } = await getSchedules();
   if (schedules.length > 0) {
-    console.log(`Found ${schedules.length} schedules`);
+    log(`Found ${schedules.length} schedules, ${schedules} and ${alarms}`);
 
     // Process any schedules that should have already been triggered
     const now = Date.now();
@@ -496,22 +503,20 @@ async function initializeExtension() {
     // Set up alarms for future schedules
     const futureSchedules = schedules.filter((s) => s.timestamp > now);
     if (futureSchedules.length > 0) {
-      console.log(
-        `Setting up alarms for ${futureSchedules.length} future schedules`
-      );
+      log(`Setting up alarms for ${futureSchedules.length} future schedules`);
 
       for (const schedule of futureSchedules) {
         try {
           chrome.alarms.create(schedule.scheduleId, {
             when: schedule.timestamp,
           });
-          console.log(
+          log(
             `Alarm created for schedule ${schedule.scheduleId} at ${new Date(
               schedule.timestamp
             ).toISOString()}`
           );
         } catch (error) {
-          console.error(
+          logError(
             `Error creating alarm for schedule ${schedule.scheduleId}:`,
             error
           );
@@ -523,5 +528,5 @@ async function initializeExtension() {
 
 // Run initialization
 initializeExtension().catch((error) => {
-  console.error("Error initializing extension:", error);
+  logError("Error initializing extension:", error);
 });

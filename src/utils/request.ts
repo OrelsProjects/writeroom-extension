@@ -1,3 +1,6 @@
+import { log, logError } from "./logger";
+
+// const API_BASE_URL = "https://9107-109-186-108-120.ngrok-free.app";
 const API_BASE_URL = "https://www.writestack.io";
 // const API_BASE_URL = "http://localhost:3000";
 
@@ -10,7 +13,7 @@ export async function makeAuthenticatedRequest(
     let url = `${baseUrl || API_BASE_URL}/${endpoint}`;
     // replace accidental double \\ with single \
     url = url.replace("\\\\", "\\");
-    console.log("Making request", url, options);
+    log("Making request", { url, options });
     const response = await fetch(url, {
       ...options,
       credentials: "include", // Include cookies automatically
@@ -22,7 +25,7 @@ export async function makeAuthenticatedRequest(
 
     if (!response.ok) {
       const text = await response.text();
-      console.log("Request failed", response.status, text);
+      log("Request failed", { status: response.status, response: text });
       return {
         success: false,
         error: text,
@@ -31,7 +34,7 @@ export async function makeAuthenticatedRequest(
     }
 
     const json = await response.json();
-    console.log("Response json", json);
+    log("Response json", json);
 
     return {
       success: true,
@@ -39,7 +42,7 @@ export async function makeAuthenticatedRequest(
       status: response.status,
     };
   } catch (error: any) {
-    console.error("Request failed", error);
+    logError("Request failed", error);
     return {
       success: false,
       error: error.message,

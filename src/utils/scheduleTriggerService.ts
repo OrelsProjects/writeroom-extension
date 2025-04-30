@@ -1,6 +1,7 @@
 import { makeAuthenticatedRequest } from "@/utils/request";
 import { NoteDraftImage, prepareAttachmentsForNote } from "./imageUtils";
 import { getSchedules, saveSchedules, Schedule } from "./scheduleUtils";
+import { log, logError } from "./logger";
 
 // API endpoint for schedule triggers
 const getScheduleTriggerAPI = (scheduleId: string) =>
@@ -28,14 +29,14 @@ interface PostToSubstackResult {
  * @returns Promise that resolves when the schedule has been handled
  */
 export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
-  console.log(`Handling triggered schedule: ${schedule.scheduleId}`);
+  log(`Handling triggered schedule: ${schedule.scheduleId}`);
 
-  const schedules = await getSchedules();
+  const { schedules } = await getSchedules();
   const freshSchedule = schedules.find(
     (s) => s.scheduleId === schedule.scheduleId
   );
   if (!freshSchedule || freshSchedule.isProcessing) {
-    console.warn(`Skipping already processing schedule ${schedule.scheduleId}`);
+    log(`Skipping already processing schedule ${schedule.scheduleId}`);
     return;
   }
   try {
@@ -48,10 +49,10 @@ export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
 
     // Notify the API that a schedule has been triggered
     const response = await getSchedule(schedule.scheduleId);
-    console.log("getSchedule response", response);
+    log("getSchedule response", response);
     // If the jsonBody is empty, notify the API of the error
     if (!response || !response.jsonBody) {
-      console.error(`Empty body received for schedule: ${schedule.scheduleId}`);
+      logError(`Empty body received for schedule: ${schedule.scheduleId}`);
       await notifyScheduleTrigger(schedule, false, "EMPTY_BODY");
       return;
     }
@@ -60,10 +61,10 @@ export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
     let attachments: NoteDraftImage[] = [];
     if (response.attachmentUrls && response.attachmentUrls.length > 0) {
       try {
-        console.log("Preparing attachments", response.attachmentUrls);
+        log("Preparing attachments", response.attachmentUrls);
         attachments = await prepareAttachmentsForNote(response.attachmentUrls);
       } catch (error) {
-        console.error(
+        logError(
           `Failed to prepare attachments for schedule ${schedule.scheduleId}:`,
           error
         );
@@ -79,18 +80,18 @@ export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
 
     // Post to Substack
     try {
-      console.log("Posting to Substack", response.jsonBody);
+      log("Posting to Substack", response.jsonBody);
       const postResult = await postToSubstack({
         jsonBody: response.jsonBody,
         attachmentIds: attachments.map((a) => a.id),
       });
-      console.log("Post result", postResult);
+      log("Post result", postResult);
       if (postResult.success) {
         await notifyScheduleTrigger(
           { ...schedule, substackNoteId: postResult.data?.id },
           true
         );
-        console.log(
+        log(
           `Successfully posted to Substack for schedule: ${schedule.scheduleId}`
         );
       } else {
@@ -100,13 +101,13 @@ export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
           "FAILED_TO_POST_TO_SUBSTACK",
           postResult.error
         );
-        console.error(
+        logError(
           `Failed to post to Substack for schedule ${schedule.scheduleId}:`,
           postResult.error
         );
       }
     } catch (error) {
-      console.error(
+      logError(
         `Error posting to Substack for schedule ${schedule.scheduleId}:`,
         error
       );
@@ -118,7 +119,7 @@ export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
       );
     }
   } catch (error) {
-    console.error(
+    logError(
       `Error handling schedule trigger for ${schedule.scheduleId}:`,
       error
     );
@@ -147,7 +148,7 @@ async function getSchedule(
   scheduleId: string
 ): Promise<ScheduleTriggerResponse | null> {
   try {
-    console.log("Getting schedule", scheduleId);
+    log("Getting schedule", scheduleId);
     const schedule = await makeAuthenticatedRequest(
       getScheduleAPI(scheduleId),
       {
@@ -159,13 +160,13 @@ async function getSchedule(
     );
 
     if (!schedule || !schedule.success) {
-      console.error(`Error getting schedule ${scheduleId}: ${schedule?.error}`);
+      logError(`Error getting schedule ${scheduleId}: ${schedule?.error}`);
       return null;
     }
 
     return schedule.data;
   } catch (error) {
-    console.error(`Error getting schedule ${scheduleId}:`, error);
+    logError(`Error getting schedule ${scheduleId}:`, error);
     throw error;
   }
 }
@@ -206,12 +207,12 @@ async function notifyScheduleTrigger(
     );
 
     if (!response || !response.success) {
-      console.error(
+      logError(
         `Error notifying API about schedule result: ${response.status} ${response.error}`
       );
     }
   } catch (error) {
-    console.error(`Error notifying API about schedule result:`, error);
+    logError(`Error notifying API about schedule result:`, error);
   }
 }
 
@@ -245,14 +246,14 @@ async function postToSubstack(body: {
 
     if (!response.ok) {
       const responseText = await response.text();
-      console.log("Error posting to Substack, response:", responseText);
+      log("Error posting to Substack, response:", responseText);
       return {
         success: false,
         error: `API returned error: ${response.status} ${responseText}`,
       };
     }
 
-    console.log("Posting to Substack, response:", response);
+    log("Posting to Substack, response:", response);
     const data = await response.json();
     return { success: true, data };
   } catch (error) {
