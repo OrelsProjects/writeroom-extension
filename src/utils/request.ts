@@ -1,6 +1,6 @@
 import { log, logError } from "./logger";
 
-// const API_BASE_URL = "https://9107-109-186-108-120.ngrok-free.app";
+// const API_BASE_URL = "https://a57f-109-186-108-120.ngrok-free.app";
 const API_BASE_URL = "https://www.writestack.io";
 // const API_BASE_URL = "http://localhost:3000";
 
@@ -19,9 +19,12 @@ export async function makeAuthenticatedRequest(
       credentials: "include", // Include cookies automatically
       headers: {
         "Content-Type": "application/json",
+        // "ngrok-skip-browser-warning": "69420",
         ...options.headers,
       },
     });
+
+    log("response of makeAuthenticatedRequest", response);
 
     if (!response.ok) {
       const text = await response.text();
@@ -33,7 +36,10 @@ export async function makeAuthenticatedRequest(
       };
     }
 
-    const json = await response.json();
+    const text = await response.text();
+    log("Response text", text);
+
+    const json = JSON.parse(text);
     log("Response json", json);
 
     return {
@@ -42,6 +48,7 @@ export async function makeAuthenticatedRequest(
       status: response.status,
     };
   } catch (error: any) {
+    console.log("error of makeAuthenticatedRequest", error);
     logError("Request failed", error);
     return {
       success: false,

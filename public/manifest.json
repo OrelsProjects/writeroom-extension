@@ -1,12 +1,20 @@
 {
   "name": "WriteStack",
-  "version": "1.2.93",
+  "version": "1.3",
   "description": "Helps users manage and schedule their Substack posts.",
   "manifest_version": 3,
   "icons": {
     "16": "16.png",
     "32": "32.png",
     "128": "128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "16.png",
+      "32": "32.png",
+      "128": "128.png"
+    }
   },
   "content_scripts": [
     {
@@ -21,20 +29,16 @@
   },
   "permissions": ["cookies", "storage", "alarms"],
   "host_permissions": [
-    "http://localhost:3000/*",
     "https://*.substack.com/*",
     "https://*.writeroom.co/*",
     "https://*.writestack.io/*",
-    "https://9107-109-186-108-120.ngrok-free.app/*",
     "https://writeroom-app-dev.s3.us-east-1.amazonaws.com/*"
   ],
   "externally_connectable": {
     "matches": [
-      "http://localhost:*/*",
       "https://*.writeroom.co/*",
       "https://*.writestack.io/*",
-      "https://*.substack.com/*",
-      "https://9107-109-186-108-120.ngrok-free.app/*"
+      "https://*.substack.com/*"
     ]
   },
   "web_accessible_resources": [

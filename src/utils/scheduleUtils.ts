@@ -1,6 +1,8 @@
 // src/utils/scheduleUtils.ts
 import { log, logError } from "./logger";
 
+export type ScheduleStatus = "scheduled" | "sent" | "missed" | "error";
+
 // Schedule data interface
 export interface Schedule {
   scheduleId: string;
@@ -8,6 +10,8 @@ export interface Schedule {
   timestamp: number;
   substackNoteId?: string;
   isProcessing?: boolean;
+  status?: ScheduleStatus;
+  error?: string;
 }
 
 export interface Alarm {
@@ -51,6 +55,7 @@ export async function createSchedule(
     scheduleId,
     userId,
     timestamp,
+    status: "scheduled",
   };
 
   // Add schedule to storage
@@ -77,7 +82,7 @@ export async function createSchedule(
  */
 export async function deleteSchedule(scheduleId: string): Promise<boolean> {
   // Get existing schedules
-  const { schedules, alarms } = await getSchedules();
+  const { schedules } = await getSchedules();
 
   // Filter out the schedule to delete
   const updatedSchedules = schedules.filter(
@@ -103,6 +108,26 @@ export async function deleteSchedule(scheduleId: string): Promise<boolean> {
   return true;
 }
 
+/**
+ * Update a schedule
+ * @param scheduleId ID of the schedule to update
+ * @param schedule Schedule to update
+ * @returns Promise resolving to the updated schedule
+ */
+export async function updateScheduleStatus(
+  scheduleId: string,
+  status: ScheduleStatus,
+  error?: string
+): Promise<Schedule | undefined> {
+  const { schedules } = await getSchedules();
+  const updatedSchedules = schedules.map((s) =>
+    s.scheduleId === scheduleId ? { ...s, status, error } : s
+  );
+  await saveSchedules(updatedSchedules);
+  return updatedSchedules.find((s) => s.scheduleId === scheduleId);
+}
+
+/**
 /**
  * Get all schedules
  * @returns Promise resolving to array of schedules

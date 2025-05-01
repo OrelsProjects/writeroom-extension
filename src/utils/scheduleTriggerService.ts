@@ -1,6 +1,11 @@
 import { makeAuthenticatedRequest } from "@/utils/request";
 import { NoteDraftImage, prepareAttachmentsForNote } from "./imageUtils";
-import { getSchedules, saveSchedules, Schedule } from "./scheduleUtils";
+import {
+  getSchedules,
+  saveSchedules,
+  Schedule,
+  ScheduleStatus,
+} from "./scheduleUtils";
 import { log, logError } from "./logger";
 
 // API endpoint for schedule triggers
@@ -8,6 +13,9 @@ const getScheduleTriggerAPI = (scheduleId: string) =>
   `api/v1/extension/schedule/${scheduleId}/triggered`;
 const getScheduleAPI = (scheduleId: string) =>
   `api/v1/extension/schedule/${scheduleId}`;
+const canPostScheduledNoteAPI = (scheduleId: string) =>
+  `api/v1/extension/schedule/${scheduleId}/can-post`;
+
 // TODO: Make sure that if writestack.io is open, open a new Substack tab to send the post.
 
 // Response from the API when a schedule is triggered
@@ -28,7 +36,16 @@ interface PostToSubstackResult {
  * @param schedule The schedule that was triggered
  * @returns Promise that resolves when the schedule has been handled
  */
-export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
+export async function handleScheduleTrigger(
+  schedule: Schedule,
+  options: {
+    skipCanPostCheck?: boolean;
+  } = {}
+): Promise<{
+  success: boolean;
+  status: ScheduleStatus | "processing";
+  error?: string;
+}> {
   log(`Handling triggered schedule: ${schedule.scheduleId}`);
 
   const { schedules } = await getSchedules();
@@ -37,7 +54,10 @@ export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
   );
   if (!freshSchedule || freshSchedule.isProcessing) {
     log(`Skipping already processing schedule ${schedule.scheduleId}`);
-    return;
+    return {
+      success: true,
+      status: "processing",
+    };
   }
   try {
     // update the schedule as processing
@@ -54,7 +74,40 @@ export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
     if (!response || !response.jsonBody) {
       logError(`Empty body received for schedule: ${schedule.scheduleId}`);
       await notifyScheduleTrigger(schedule, false, "EMPTY_BODY");
-      return;
+      return {
+        success: false,
+        status: "error",
+        error: "The body of the note is empty",
+      };
+    }
+
+    const canPostResponse =
+      options.skipCanPostCheck
+        ? {
+            success: true,
+            data: { canPost: true },
+            error: null,
+          }
+        : await makeAuthenticatedRequest(
+            canPostScheduledNoteAPI(schedule.scheduleId),
+            {
+              method: "POST",
+            }
+          );
+    if (
+      !canPostResponse ||
+      !canPostResponse.success ||
+      !canPostResponse.data.canPost
+    ) {
+      logError(
+        `Error checking if can post scheduled note: ${canPostResponse?.error}`
+      );
+      await notifyScheduleTrigger(schedule, false, "CANT_POST_ERROR");
+      return {
+        success: false,
+        status: "error",
+        error: canPostResponse?.error || "Unknown error",
+      };
     }
 
     // Process attachments if any
@@ -74,7 +127,11 @@ export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
           "FAILED_TO_PREPARE_ATTACHMENTS",
           String(error)
         );
-        return;
+        return {
+          success: false,
+          status: "error",
+          error: "Failed to upload attachments",
+        };
       }
     }
 
@@ -94,6 +151,10 @@ export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
         log(
           `Successfully posted to Substack for schedule: ${schedule.scheduleId}`
         );
+        return {
+          success: true,
+          status: "sent",
+        };
       } else {
         await notifyScheduleTrigger(
           schedule,
@@ -105,6 +166,11 @@ export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
           `Failed to post to Substack for schedule ${schedule.scheduleId}:`,
           postResult.error
         );
+        return {
+          success: false,
+          status: "error",
+          error: "Failed to post note to Substack",
+        };
       }
     } catch (error) {
       logError(
@@ -117,6 +183,11 @@ export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
         "FAILED_TO_CREATE_NOTE",
         String(error)
       );
+      return {
+        success: false,
+        status: "error",
+        error: "Failed to post note to Substack",
+      };
     }
   } catch (error) {
     logError(
@@ -129,6 +200,11 @@ export async function handleScheduleTrigger(schedule: Schedule): Promise<void> {
       "GENERAL_ERROR",
       String(error)
     );
+    return {
+      success: false,
+      status: "error",
+      error: "Unknown error",
+    };
   } finally {
     // update the schedule as not processing
     freshSchedule.isProcessing = false;
@@ -239,7 +315,9 @@ async function postToSubstack(body: {
       headers: {
         "content-type": "application/json",
         Referer: "https://substack.com/home",
+        Origin: "https://substack.com",
       },
+      credentials: "include", // Required to send cookies
       body: bodyContent,
       method: "POST",
     });

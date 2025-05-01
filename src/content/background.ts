@@ -5,6 +5,8 @@ import {
   deleteSchedule,
   getSchedules,
   Schedule,
+  ScheduleStatus,
+  updateScheduleStatus,
 } from "../utils/scheduleUtils";
 import { handleScheduleTrigger } from "../utils/scheduleTriggerService";
 import { NoteDraftImage, prepareAttachmentsForNote } from "../utils/imageUtils";
@@ -125,9 +127,9 @@ const apiHandlers: ApiHandlers = {
         headers: {
           "content-type": "application/json",
           Referer: "https://substack.com/home",
-          // Origin: "https://substack.com",
+          Origin: "https://substack.com",
         },
-        // credentials: "include", // Required to send cookies
+        credentials: "include", // Required to send cookies
         body,
         method: "POST",
       });
@@ -381,10 +383,22 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (schedule) {
     log(`Processing schedule: ${schedule.scheduleId}`);
     try {
-      await handleScheduleTrigger(schedule);
-
-      // Delete the schedule after processing
-      await deleteSchedule(schedule.scheduleId);
+      const result = await handleScheduleTrigger(schedule);
+      log(`Schedule ${schedule.scheduleId} processed:`, result);
+      if (result.status === "sent") {
+        // Delete the schedule after processing
+        await deleteSchedule(schedule.scheduleId);
+      } else {
+        if (result.status === "processing") {
+          return;
+        }
+        // update the status and error
+        await updateScheduleStatus(
+          schedule.scheduleId,
+          result.status,
+          result.error
+        );
+      }
     } catch (error) {
       logError(`Error handling schedule ${schedule.scheduleId}:`, error);
     }
@@ -437,7 +451,7 @@ chrome.runtime.onMessageExternal.addListener(
 
 chrome.runtime.onMessage.addListener(
   (request: ChromeMessage, sender, sendResponse) => {
-    log("Background got internal message:", request);
+    log(`Background got internal from ${sender.url} message: ${JSON.stringify(request)}`);
 
     if (request?.type === "PING") {
       sendResponse({
@@ -470,63 +484,3 @@ chrome.runtime.onMessage.addListener(
     return false;
   }
 );
-
-// Initialize the extension
-async function initializeExtension() {
-  log("Initializing extension...");
-
-  // Check for any pending schedules
-  const { schedules, alarms } = await getSchedules();
-  if (schedules.length > 0) {
-    log(`Found ${schedules.length} schedules, ${schedules} and ${alarms}`);
-
-    // Process any schedules that should have already been triggered
-    const now = Date.now();
-    // const pastSchedules = schedules.filter((s) => s.timestamp <= now);
-
-    // if (pastSchedules.length > 0) {
-    //   console.log(`Processing ${pastSchedules.length} past schedules`);
-
-    //   for (const schedule of pastSchedules) {
-    //     try {
-    //       await handleScheduleTrigger(schedule);
-    //       await deleteSchedule(schedule.scheduleId);
-    //     } catch (error) {
-    //       console.error(
-    //         `Error handling past schedule ${schedule.scheduleId}:`,
-    //         error
-    //       );
-    //     }
-    //   }
-    // }
-
-    // Set up alarms for future schedules
-    const futureSchedules = schedules.filter((s) => s.timestamp > now);
-    if (futureSchedules.length > 0) {
-      log(`Setting up alarms for ${futureSchedules.length} future schedules`);
-
-      for (const schedule of futureSchedules) {
-        try {
-          chrome.alarms.create(schedule.scheduleId, {
-            when: schedule.timestamp,
-          });
-          log(
-            `Alarm created for schedule ${schedule.scheduleId} at ${new Date(
-              schedule.timestamp
-            ).toISOString()}`
-          );
-        } catch (error) {
-          logError(
-            `Error creating alarm for schedule ${schedule.scheduleId}:`,
-            error
-          );
-        }
-      }
-    }
-  }
-}
-
-// Run initialization
-initializeExtension().catch((error) => {
-  logError("Error initializing extension:", error);
-});

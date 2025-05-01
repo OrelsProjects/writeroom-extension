@@ -19,6 +19,7 @@ export default defineConfig({
       input: {
         contentScript: "./src/content/contentScript.tsx",
         background: "./src/content/background.ts",
+        popup: "./src/popup/index.tsx",
       },
       output: {
         dir: "dist",

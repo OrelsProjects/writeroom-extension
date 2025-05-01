@@ -48,9 +48,9 @@ export async function log(message: string, data?: any): Promise<void> {
 export async function logError(message: string, data?: any): Promise<void> {
   // Always log to console first
   if (data !== undefined) {
-    console.error(message, data);
+    console.log(`[ERROR] ${message}`, data);
   } else {
-    console.error(message);
+    console.log(`[ERROR] ${message}`);
   }
 
   try {
