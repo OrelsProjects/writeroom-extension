@@ -3,6 +3,7 @@ import { Note } from "@/types/note";
 import { log, logError } from "./logger";
 import { getSchedules } from "./scheduleUtils";
 import { handleScheduleTrigger } from "./scheduleTriggerService";
+import { PostSubstackNoteResposne } from "@/types/substack-note";
 
 // API endpoint for fetching schedules
 const getSchedulesAPI = "api/v1/extension/schedules";
@@ -44,7 +45,9 @@ export async function fetchNotesByScheduleIds(): Promise<Note[]> {
  * @param scheduleId ID of the schedule to trigger
  * @returns Promise resolving to boolean indicating success
  */
-export async function sendNoteNow(scheduleId: string): Promise<boolean> {
+export async function sendNoteNow(
+  scheduleId: string
+): Promise<PostSubstackNoteResposne | null> {
   try {
     log(`Sending note now: ${scheduleId}`);
     const { schedules } = await getSchedules();
@@ -52,17 +55,21 @@ export async function sendNoteNow(scheduleId: string): Promise<boolean> {
 
     if (!schedule) {
       logError(`Schedule not found: ${scheduleId}`);
-      return false;
+      return null;
     }
 
     // Use the schedule trigger service to post to Substack
-    await handleScheduleTrigger(schedule, {
+    const result = await handleScheduleTrigger(schedule, {
       skipCanPostCheck: true,
     });
-    return true;
+    if (!result.success) {
+      logError(`Error sending note now: ${result.error}`);
+      return null;
+    }
+    return result.data || null;
   } catch (error) {
     logError(`Error sending note now: ${error}`);
-    return false;
+    return null;
   }
 }
 
@@ -71,8 +78,8 @@ export async function sendNoteNow(scheduleId: string): Promise<boolean> {
  * @param noteId ID of the note to reschedule
  */
 export function openRescheduleTab(noteId: string): void {
-  const url = `https://writestack.io/queue/?noteId=${noteId}`;
+  //   const url = `https://writestack.io/queue/?noteId=${noteId}`;
   // TODO: For local development, use the local host
-  // const url = `http://localhost:3000/queue/?noteId=${noteId}`;
+  const url = `http://localhost:3000/queue/?noteId=${noteId}`;
   chrome.tabs.create({ url });
 }

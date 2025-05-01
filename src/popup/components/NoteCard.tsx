@@ -3,13 +3,23 @@ import { Note } from "@/types/note";
 import { sendNoteNow, openRescheduleTab } from "@/utils/scheduleApiService";
 import "../../styles/popup.css";
 import Tooltip from "./Tooltip";
-import { PencilIcon, RefreshCcw, SendIcon, Clock } from "lucide-react";
+import {
+  PencilIcon,
+  RefreshCcw,
+  SendIcon,
+  Clock,
+  ExternalLink,
+} from "lucide-react";
+import { PostSubstackNoteResposne } from "@/types/substack-note";
+
+const buildNoteUrl = (noteData: PostSubstackNoteResposne) =>
+  `https://substack.com/@${noteData?.user_primary_publication.subdomain}/note/c-${noteData?.id}`;
+
 interface NoteCardProps {
   note: Note;
   scheduleId: string;
   isMissed: boolean;
   onClose: () => void;
-  status?: "scheduled" | "sent" | "missed" | "error";
   onNoteSent: () => void;
 }
 
@@ -19,16 +29,14 @@ const NoteCard: React.FC<NoteCardProps> = ({
   isMissed,
   onClose,
   onNoteSent,
-  status = "scheduled",
 }) => {
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
-  const [imageError, setImageError] = useState(false);
+  const [, setImageError] = useState(false);
   const [alarmExists, setAlarmExists] = useState<boolean | null>(null);
   const [isCheckingAlarm, setIsCheckingAlarm] = useState(true);
-
-  // Determine status if not provided
-  const computedStatus = status === "scheduled" && isMissed ? "missed" : status;
+  const [sentNoteData, setSentNoteData] =
+    useState<PostSubstackNoteResposne | null>(null);
 
   // Check if the alarm exists
   useEffect(() => {
@@ -56,18 +64,18 @@ const NoteCard: React.FC<NoteCardProps> = ({
     setIsSending(true);
     setSendError(null);
     try {
-      const success = await sendNoteNow(scheduleId);
-      if (!success) {
+      const note = await sendNoteNow(scheduleId);
+      if (!note) {
         setSendError("Failed to send note. Please try again.");
       } else {
         onClose();
+        setSentNoteData(note);
       }
     } catch (error) {
       setSendError("An error occurred while sending the note.");
       console.error(error);
     } finally {
       setIsSending(false);
-      onNoteSent();
     }
   };
 
@@ -107,6 +115,12 @@ const NoteCard: React.FC<NoteCardProps> = ({
   // Parse the scheduled time
   const scheduledTime = note.scheduledTo ? new Date(note.scheduledTo) : null;
 
+  const handleOpenNote = () => {
+    if (sentNoteData) {
+      window.open(buildNoteUrl(sentNoteData), "_blank");
+    }
+  };
+
   // Get status badge tooltip content
   const getStatusTooltip = (status: string) => {
     switch (status) {
@@ -145,8 +159,18 @@ const NoteCard: React.FC<NoteCardProps> = ({
         </div>
 
         <div className="actions-container">
-          {isMissed ? (
-            <>
+          {isMissed &&
+            (!!sentNoteData ? (
+              <button
+                onClick={handleOpenNote}
+                disabled={isSending}
+                className="action-button primary"
+                title="Send now"
+              >
+                <ExternalLink size={16} className="icon-button" />
+                View note
+              </button>
+            ) : (
               <button
                 onClick={handleSendNow}
                 disabled={isSending}
@@ -163,23 +187,14 @@ const NoteCard: React.FC<NoteCardProps> = ({
                 )}
                 Send now
               </button>
-              <button
-                onClick={handleReschedule}
-                className="action-button secondary"
-                title="Reschedule"
-              >
-                <PencilIcon size={16} className="mr-2" /> Edit
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={handleReschedule}
-              className="action-button secondary"
-              title="Reschedule"
-            >
-              <PencilIcon size={16} className="mr-2" /> Edit
-            </button>
-          )}
+            ))}
+          <button
+            onClick={handleReschedule}
+            className="action-button secondary"
+            title="Reschedule"
+          >
+            <PencilIcon size={16} className="mr-2" /> Edit
+          </button>
 
           {/* Show additional warning if alarm doesn't exist */}
           {alarmExists === false && !isCheckingAlarm && !isMissed && (

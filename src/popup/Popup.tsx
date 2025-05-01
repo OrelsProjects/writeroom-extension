@@ -137,6 +137,7 @@ const Popup: React.FC = () => {
   const handleDismissNote = async (scheduleId: string) => {
     try {
       await deleteSchedule(scheduleId);
+      console.log("Deleted schedule:", scheduleId);
       // Update the schedules list
       const { schedules: updatedSchedules } = await getSchedules();
       setSchedules(updatedSchedules);
@@ -219,8 +220,8 @@ const Popup: React.FC = () => {
 
       <div className="create-new-button-container">
         <button onClick={handleCreateNew} className="create-new-button">
-            <Calendar size={20} />
-            Create New Scheduled Note
+          <Calendar size={20} />
+          Create New Scheduled Note
         </button>
       </div>
     </div>

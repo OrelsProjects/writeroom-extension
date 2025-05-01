@@ -7,6 +7,7 @@ import {
   ScheduleStatus,
 } from "./scheduleUtils";
 import { log, logError } from "./logger";
+import { PostSubstackNoteResposne } from "@/types/substack-note";
 
 // API endpoint for schedule triggers
 const getScheduleTriggerAPI = (scheduleId: string) =>
@@ -28,7 +29,7 @@ interface ScheduleTriggerResponse {
 interface PostToSubstackResult {
   success: boolean;
   error?: string;
-  data?: any;
+  data?: PostSubstackNoteResposne;
 }
 
 /**
@@ -45,6 +46,7 @@ export async function handleScheduleTrigger(
   success: boolean;
   status: ScheduleStatus | "processing";
   error?: string;
+  data?: PostSubstackNoteResposne;
 }> {
   log(`Handling triggered schedule: ${schedule.scheduleId}`);
 
@@ -81,19 +83,18 @@ export async function handleScheduleTrigger(
       };
     }
 
-    const canPostResponse =
-      options.skipCanPostCheck
-        ? {
-            success: true,
-            data: { canPost: true },
-            error: null,
+    const canPostResponse = options.skipCanPostCheck
+      ? {
+          success: true,
+          data: { canPost: true },
+          error: null,
+        }
+      : await makeAuthenticatedRequest(
+          canPostScheduledNoteAPI(schedule.scheduleId),
+          {
+            method: "POST",
           }
-        : await makeAuthenticatedRequest(
-            canPostScheduledNoteAPI(schedule.scheduleId),
-            {
-              method: "POST",
-            }
-          );
+        );
     if (
       !canPostResponse ||
       !canPostResponse.success ||
@@ -145,7 +146,7 @@ export async function handleScheduleTrigger(
       log("Post result", postResult);
       if (postResult.success) {
         await notifyScheduleTrigger(
-          { ...schedule, substackNoteId: postResult.data?.id },
+          { ...schedule, substackNoteId: postResult.data?.id?.toString() },
           true
         );
         log(
@@ -154,6 +155,7 @@ export async function handleScheduleTrigger(
         return {
           success: true,
           status: "sent",
+          data: postResult.data,
         };
       } else {
         await notifyScheduleTrigger(
