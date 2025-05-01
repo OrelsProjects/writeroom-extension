@@ -6,6 +6,7 @@ import { getSchedules, Schedule, deleteSchedule } from "@/utils/scheduleUtils";
 import NoteCard from "./components/NoteCard";
 import DayDivider from "./components/DayDivider";
 import { RefreshCcw, Calendar } from "lucide-react";
+import { notifyScheduleTrigger } from "@/utils/scheduleTriggerService";
 
 // Helper to format dates consistently for grouping
 const formatDateKey = (date: Date): string => {
@@ -145,6 +146,7 @@ const Popup: React.FC = () => {
       setNotes((prev) => prev.filter((note) => note.id !== scheduleId));
     } catch (err) {
       console.error("Error dismissing note:", err);
+      throw err;
     }
   };
 
@@ -159,11 +161,30 @@ const Popup: React.FC = () => {
     return scheduledDate < now;
   };
 
-  const handleNoteSent = () => fetchData();
-
   const handleCreateNew = () => {
     // Open the create new scheduled note tab
     chrome.tabs.create({ url: "https://www.writestack.io/queue" });
+  };
+
+  const handleClearSchedule = async (schedule: Schedule) => {
+    try {
+      await handleDismissNote(schedule.scheduleId);
+      // Notify backend
+      await notifyScheduleTrigger(
+        schedule,
+        true,
+        undefined,
+        undefined,
+        "draft"
+      );
+    } catch (err) {
+      console.error("Error clearing schedule:", err);
+      throw err;
+    }
+  };
+
+  const getSchedule = (note: Note): Schedule | undefined => {
+    return schedules.find((s) => s.scheduleId === note.scheduleId);
   };
 
   return (
@@ -200,18 +221,23 @@ const Popup: React.FC = () => {
             return (
               <React.Fragment key={dateKey}>
                 <DayDivider date={day} />
-                {notesForDay.map((note) => (
-                  <NoteCard
-                    key={note.id}
-                    note={note}
-                    scheduleId={(note as any).scheduleId || note.id}
-                    isMissed={isNoteMissed(note)}
-                    onClose={() =>
-                      handleDismissNote((note as any).scheduleId || note.id)
-                    }
-                    onNoteSent={handleNoteSent}
-                  />
-                ))}
+                {notesForDay.map((note) => {
+                  const schedule = getSchedule(note);
+                  if (!schedule) {
+                    console.log(`No schedule found for note: ${note.id}`);
+                    return null;
+                  }
+                  return (
+                    <NoteCard
+                      key={note.id}
+                      note={note}
+                      schedule={schedule}
+                      isMissed={isNoteMissed(note)}
+                      onClose={() => handleDismissNote(schedule.scheduleId)}
+                      onClearSchedule={handleClearSchedule}
+                    />
+                  );
+                })}
               </React.Fragment>
             );
           })}

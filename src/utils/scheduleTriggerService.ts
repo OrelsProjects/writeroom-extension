@@ -257,16 +257,18 @@ async function getSchedule(
  * @param text Additional error details
  * @returns Promise that resolves when the API has been notified
  */
-async function notifyScheduleTrigger(
+export async function notifyScheduleTrigger(
   schedule: Schedule,
   ok: boolean,
   error?: string,
-  text?: string
+  text?: string,
+  newStatus?: "draft" | "scheduled" | "published"
 ): Promise<void> {
   try {
     const body: any = {
       ok,
       substackNoteId: schedule.substackNoteId,
+      newStatus,
     };
 
     if (!ok && error) {

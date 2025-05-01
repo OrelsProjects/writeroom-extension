@@ -9,26 +9,29 @@ import {
   SendIcon,
   Clock,
   ExternalLink,
+  TrashIcon,
 } from "lucide-react";
 import { PostSubstackNoteResposne } from "@/types/substack-note";
+import { Schedule } from "@/utils/scheduleUtils";
+import { logError } from "@/utils/logger";
 
 const buildNoteUrl = (noteData: PostSubstackNoteResposne) =>
   `https://substack.com/@${noteData?.user_primary_publication.subdomain}/note/c-${noteData?.id}`;
 
 interface NoteCardProps {
   note: Note;
-  scheduleId: string;
+  schedule: Schedule;
   isMissed: boolean;
   onClose: () => void;
-  onNoteSent: () => void;
+  onClearSchedule: (schedule: Schedule) => Promise<void>;
 }
 
 const NoteCard: React.FC<NoteCardProps> = ({
   note,
-  scheduleId,
+  schedule,
   isMissed,
   onClose,
-  onNoteSent,
+  onClearSchedule,
 }) => {
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -37,6 +40,7 @@ const NoteCard: React.FC<NoteCardProps> = ({
   const [isCheckingAlarm, setIsCheckingAlarm] = useState(true);
   const [sentNoteData, setSentNoteData] =
     useState<PostSubstackNoteResposne | null>(null);
+  const [loading, setLoading] = useState(false);
 
   // Check if the alarm exists
   useEffect(() => {
@@ -46,7 +50,9 @@ const NoteCard: React.FC<NoteCardProps> = ({
         // Get all alarms
         const alarms = await chrome.alarms.getAll();
         // Check if there's an alarm with this scheduleId
-        const alarm = alarms.find((alarm) => alarm.name === scheduleId);
+        const alarm = alarms.find(
+          (alarm) => alarm.name === schedule.scheduleId
+        );
         setAlarmExists(!!alarm);
       } catch (error) {
         console.error("Error checking alarm:", error);
@@ -57,14 +63,14 @@ const NoteCard: React.FC<NoteCardProps> = ({
     };
 
     checkAlarm();
-  }, [scheduleId]);
+  }, [schedule.scheduleId]);
 
   const handleSendNow = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsSending(true);
     setSendError(null);
     try {
-      const note = await sendNoteNow(scheduleId);
+      const note = await sendNoteNow(schedule.scheduleId);
       if (!note) {
         setSendError("Failed to send note. Please try again.");
       } else {
@@ -80,12 +86,27 @@ const NoteCard: React.FC<NoteCardProps> = ({
   };
 
   const handleReschedule = (e: React.MouseEvent) => {
+    setSendError(null);
     e.stopPropagation();
     openRescheduleTab(note.id);
   };
 
   const handleImageError = () => {
     setImageError(true);
+  };
+
+  const handleClearSchedule = async (e: React.MouseEvent) => {
+    setSendError(null);
+    setLoading(true);
+    e.stopPropagation();
+    try {
+      await onClearSchedule(schedule);
+    } catch (err) {
+      await logError("Error clearing schedule:", err);
+      setSendError("Error clearing schedule. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Format the time (HH:MM)
@@ -180,7 +201,7 @@ const NoteCard: React.FC<NoteCardProps> = ({
                 {isSending ? (
                   <RefreshCcw
                     size={16}
-                    className="icon-button icon-button-loading"
+                    className="icon-button  icon-button-loading-reverse"
                   />
                 ) : (
                   <SendIcon size={16} className="icon-button" />
@@ -195,7 +216,22 @@ const NoteCard: React.FC<NoteCardProps> = ({
           >
             <PencilIcon size={16} className="mr-2" /> Edit
           </button>
-
+          {/*  Clear schedule */}
+          <button
+            onClick={handleClearSchedule}
+            className="action-button danger"
+            title="Clear schedule"
+          >
+            {loading ? (
+              <RefreshCcw
+                size={16}
+                className="icon-button icon-button-danger icon-button-loading-reverse"
+              />
+            ) : (
+              <TrashIcon size={16} className="icon-button" />
+            )}
+            Clear
+          </button>
           {/* Show additional warning if alarm doesn't exist */}
           {alarmExists === false && !isCheckingAlarm && !isMissed && (
             <Tooltip

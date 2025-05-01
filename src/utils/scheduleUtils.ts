@@ -83,24 +83,21 @@ export async function createSchedule(
 export async function deleteSchedule(scheduleId: string): Promise<boolean> {
   // Get existing schedules
   const { schedules } = await getSchedules();
+  console.log("About to delete schedule", scheduleId);
 
   // Filter out the schedule to delete
   const updatedSchedules = schedules.filter(
     (schedule) => schedule.scheduleId !== scheduleId
   );
 
-  // If no schedule was removed, return true
-  if (updatedSchedules.length === schedules.length) {
-    return true;
-  }
-
   // Delete the alarm for this schedule
   try {
     await chrome.alarms.clear(scheduleId);
-    // delete from storage
   } catch (error) {
     logError(`Failed to clear alarm for schedule ${scheduleId}:`, error);
   }
+
+  console.log("Updated schedules", updatedSchedules);
 
   // Save updated schedules
   await saveSchedules(updatedSchedules);
@@ -127,7 +124,6 @@ export async function updateScheduleStatus(
   return updatedSchedules.find((s) => s.scheduleId === scheduleId);
 }
 
-/**
 /**
  * Get all schedules
  * @returns Promise resolving to array of schedules
@@ -167,29 +163,6 @@ export async function saveSchedules(schedules: Schedule[]): Promise<void> {
     throw new Error("Failed to save schedules");
   }
 }
-
-// /**
-//  * Finds all duplicate alarms and removes them
-//  * @param schedule
-//  */
-// async function clearDuplicateAlarms(): Promise<void> {
-//   try {
-//     console.log("Clearing duplicate alarms");
-//     const allAlarms = await chrome.alarms.getAll();
-//     // go over all alarms and remove duplicates
-//     for (const alarm of allAlarms) {
-//       const duplicateAlarm = allAlarms.find(
-//         (a) => a.name === alarm.name && a.scheduledTime === alarm.scheduledTime
-//       );
-//       if (duplicateAlarm) {
-//         console.log("Clearing duplicate alarm", duplicateAlarm.name);
-//         await chrome.alarms.clear(duplicateAlarm.name);
-//       }
-//     }
-//   } catch (error) {
-//     console.error("Failed to clear duplicate alarms:", error);
-//   }
-// }
 
 /**
  * Create a Chrome alarm for a schedule

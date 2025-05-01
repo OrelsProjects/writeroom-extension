@@ -78,8 +78,8 @@ export async function sendNoteNow(
  * @param noteId ID of the note to reschedule
  */
 export function openRescheduleTab(noteId: string): void {
-  //   const url = `https://writestack.io/queue/?noteId=${noteId}`;
+    const url = `https://writestack.io/queue/?noteId=${noteId}`;
   // TODO: For local development, use the local host
-  const url = `http://localhost:3000/queue/?noteId=${noteId}`;
+  // const url = `http://localhost:3000/queue/?noteId=${noteId}`;
   chrome.tabs.create({ url });
 }
