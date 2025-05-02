@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && mkdir -p dist/styles && cat src/styles/*.css > dist/styles/main.css && cp src/styles/popup.css dist/styles/",
+    "build": "vite build && mkdir -p dist/styles && cat src/styles/*.css > dist/styles/main.css && cp src/styles/popup.css dist/styles/ && cp public/manifest.json dist/manifest.json",
+    "build:prod": "node scripts/build.js --env production && tsc && vite build && mkdir -p dist/styles && cat src/styles/*.css > dist/styles/main.css && cp src/styles/popup.css dist/styles/ && cp public/manifest-production.json dist/manifest.json && rm public/manifest-production.json && rm dist/manifest-production.json",
     "preview": "vite preview"
   },
   "dependencies": {

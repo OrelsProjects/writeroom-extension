@@ -18,8 +18,12 @@
   },
   "content_scripts": [
     {
-      "js": ["assets/contentScript.js"],
-      "matches": ["https://*.substack.com/*"],
+      "js": [
+        "assets/contentScript.js"
+      ],
+      "matches": [
+        "https://*.substack.com/*"
+      ],
       "run_at": "document_end"
     }
   ],
@@ -27,7 +31,11 @@
     "service_worker": "assets/background.js",
     "type": "module"
   },
-  "permissions": ["cookies", "storage", "alarms"],
+  "permissions": [
+    "cookies",
+    "storage",
+    "alarms"
+  ],
   "host_permissions": [
     "https://*.substack.com/*",
     "https://*.writeroom.co/*",
@@ -43,8 +51,13 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["assets/*", "styles/*"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "assets/*",
+        "styles/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }

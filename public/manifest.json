@@ -1,5 +1,5 @@
 {
-  "name": "WriteStack",
+  "name": "WriteStack-dev",
   "version": "1.3",
   "description": "Helps users manage and schedule their Substack posts.",
   "manifest_version": 3,
@@ -32,11 +32,13 @@
     "https://*.substack.com/*",
     "https://*.writeroom.co/*",
     "https://*.writestack.io/*",
+    "http://localhost:3000/*",
     "https://writeroom-app-dev.s3.us-east-1.amazonaws.com/*"
   ],
   "externally_connectable": {
     "matches": [
       "https://*.writeroom.co/*",
+      "http://localhost:3000/*",
       "https://*.writestack.io/*",
       "https://*.substack.com/*"
     ]
