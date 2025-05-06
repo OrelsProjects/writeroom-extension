@@ -8,6 +8,7 @@ export interface Schedule {
   scheduleId: string;
   userId: string;
   timestamp: number;
+  noteId?: string;
   substackNoteId?: string;
   isProcessing?: boolean;
   status?: ScheduleStatus;
@@ -29,15 +30,18 @@ const SCHEDULES_STORAGE_KEY = "writestack_schedules";
  * @param timestamp Unix timestamp when the schedule should trigger
  * @returns Promise resolving to the created schedule
  */
-export async function createSchedule(
-  scheduleId: string,
-  userId: string,
-  timestamp: number
-): Promise<Schedule> {
+export async function createSchedule(schedule: {
+  scheduleId: string;
+  noteId?: string;
+  userId: string;
+  timestamp: number;
+}): Promise<Schedule> {
   // Validate parameters
-  if (!scheduleId || !userId || !timestamp) {
+  if (!schedule.scheduleId || !schedule.userId || !schedule.timestamp) {
     throw new Error("Invalid schedule parameters");
   }
+
+  const { scheduleId, noteId, userId, timestamp } = schedule;
 
   // Get existing schedules
   const { schedules } = await getSchedules();
@@ -55,6 +59,7 @@ export async function createSchedule(
     scheduleId,
     userId,
     timestamp,
+    noteId,
     status: "scheduled",
   };
 

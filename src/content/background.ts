@@ -39,11 +39,12 @@ type ApiHandlers = {
   }) => Promise<Response<any>>;
   getSubstackCookies: () => Promise<Response<string>>;
   setSubstackCookies: () => Promise<Response<any>>;
-  createSchedule: (
-    scheduleId: string,
-    userId: string,
-    timestamp: number
-  ) => Promise<Response<Schedule>>;
+  createSchedule: (schedule: {
+    scheduleId: string;
+    userId: string;
+    timestamp: number;
+    noteId?: string;
+  }) => Promise<Response<Schedule>>;
   deleteSchedule: (scheduleId: string) => Promise<Response<boolean>>;
   getSchedules: () => Promise<
     Response<{ schedules: Schedule[]; alarms: Alarm[] }>
@@ -212,15 +213,24 @@ const apiHandlers: ApiHandlers = {
 
   // Create a new schedule
   createSchedule: async (
-    scheduleId: string,
-    userId: string,
-    timestamp: number
+    schedule: {
+      scheduleId: string;
+      userId: string;
+      timestamp: number;
+      noteId?: string;
+    }
   ): Promise<Response<Schedule>> => {
     try {
+      const { scheduleId, userId, timestamp, noteId } = schedule;
       // Create schedule in extension storage
       log("Creating schedule", { scheduleId, userId, timestamp });
-      const schedule = await createSchedule(scheduleId, userId, timestamp);
-      log("Schedule created successfully", schedule);
+      const scheduleCreated = await createSchedule({
+        scheduleId,
+        userId,
+        timestamp,
+        noteId,
+      });
+      log("Schedule created successfully", scheduleCreated);
       return {
         message: "Schedule created successfully",
         action: "SCHEDULE_CREATED",
@@ -384,9 +394,12 @@ function callApiHandler(
       );
     case "createSchedule":
       return apiHandlers.createSchedule(
-        params[0] as string,
-        params[1] as string,
-        params[2] as number
+        {
+          scheduleId: params[0] as string,
+          userId: params[1] as string,
+          timestamp: params[2] as number,
+          noteId: params[3] as string | undefined,
+        }
       );
     case "deleteSchedule":
       return apiHandlers.deleteSchedule(params[0] as string);
