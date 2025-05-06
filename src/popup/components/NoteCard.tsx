@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Note } from "@/types/note";
-import { sendNoteNow, openRescheduleTab } from "@/utils/scheduleApiService";
+import { openRescheduleTab } from "@/utils/scheduleApiService";
 import "../../styles/popup.css";
 import Tooltip from "./Tooltip";
 import {
@@ -15,14 +15,14 @@ import { PostSubstackNoteResposne } from "@/types/substack-note";
 import { Schedule } from "@/utils/scheduleUtils";
 import { logError } from "@/utils/logger";
 
-const buildNoteUrl = (noteData: PostSubstackNoteResposne) =>
-  `https://substack.com/@${noteData?.user_primary_publication.subdomain}/note/c-${noteData?.id}`;
-
 interface NoteCardProps {
   note: Note;
   schedule: Schedule;
   isMissed: boolean;
   onClose: () => void;
+  onSendNoteNow: (
+    scheduleId: string
+  ) => Promise<PostSubstackNoteResposne | null>;
   onClearSchedule: (schedule: Schedule) => Promise<void>;
 }
 
@@ -31,6 +31,7 @@ const NoteCard: React.FC<NoteCardProps> = ({
   schedule,
   isMissed,
   onClose,
+  onSendNoteNow,
   onClearSchedule,
 }) => {
   const [isSending, setIsSending] = useState(false);
@@ -38,8 +39,6 @@ const NoteCard: React.FC<NoteCardProps> = ({
   const [, setImageError] = useState(false);
   const [alarmExists, setAlarmExists] = useState<boolean | null>(null);
   const [isCheckingAlarm, setIsCheckingAlarm] = useState(true);
-  const [sentNoteData, setSentNoteData] =
-    useState<PostSubstackNoteResposne | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Check if the alarm exists
@@ -70,12 +69,11 @@ const NoteCard: React.FC<NoteCardProps> = ({
     setIsSending(true);
     setSendError(null);
     try {
-      const note = await sendNoteNow(schedule.scheduleId);
+      const note = await onSendNoteNow(schedule.scheduleId);
       if (!note) {
         setSendError("Failed to send note. Please try again.");
       } else {
         onClose();
-        setSentNoteData(note);
       }
     } catch (error) {
       setSendError("An error occurred while sending the note.");
@@ -136,12 +134,6 @@ const NoteCard: React.FC<NoteCardProps> = ({
   // Parse the scheduled time
   const scheduledTime = note.scheduledTo ? new Date(note.scheduledTo) : null;
 
-  const handleOpenNote = () => {
-    if (sentNoteData) {
-      window.open(buildNoteUrl(sentNoteData), "_blank");
-    }
-  };
-
   // Get status badge tooltip content
   const getStatusTooltip = (status: string) => {
     switch (status) {
@@ -180,35 +172,24 @@ const NoteCard: React.FC<NoteCardProps> = ({
         </div>
 
         <div className="actions-container">
-          {isMissed &&
-            (!!sentNoteData ? (
-              <button
-                onClick={handleOpenNote}
-                disabled={isSending}
-                className="action-button primary"
-                title="Send now"
-              >
-                <ExternalLink size={16} className="icon-button" />
-                View note
-              </button>
-            ) : (
-              <button
-                onClick={handleSendNow}
-                disabled={isSending}
-                className="action-button primary"
-                title="Send now"
-              >
-                {isSending ? (
-                  <RefreshCcw
-                    size={16}
-                    className="icon-button  icon-button-loading-reverse"
-                  />
-                ) : (
-                  <SendIcon size={16} className="icon-button" />
-                )}
-                Send now
-              </button>
-            ))}
+          {isMissed && (
+            <button
+              onClick={handleSendNow}
+              disabled={isSending}
+              className="action-button primary"
+              title="Send now"
+            >
+              {isSending ? (
+                <RefreshCcw
+                  size={16}
+                  className="icon-button icon-button-loading"
+                />
+              ) : (
+                <SendIcon size={16} className="icon-button" />
+              )}
+              Send now
+            </button>
+          )}
           <button
             onClick={handleReschedule}
             className="action-button secondary"
@@ -225,12 +206,12 @@ const NoteCard: React.FC<NoteCardProps> = ({
             {loading ? (
               <RefreshCcw
                 size={16}
-                className="icon-button icon-button-danger icon-button-loading-reverse"
+                className="icon-button icon-button-danger icon-button-loading"
               />
             ) : (
               <TrashIcon size={16} className="icon-button" />
             )}
-            Clear
+            Delete schedule
           </button>
           {/* Show additional warning if alarm doesn't exist */}
           {alarmExists === false && !isCheckingAlarm && !isMissed && (

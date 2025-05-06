@@ -5,15 +5,12 @@ import {
   deleteSchedule,
   getSchedules,
   Schedule,
-  ScheduleStatus,
   updateScheduleStatus,
 } from "../utils/scheduleUtils";
 import { handleScheduleTrigger } from "../utils/scheduleTriggerService";
 import { NoteDraftImage, prepareAttachmentsForNote } from "../utils/imageUtils";
 import { log, logError } from "../utils/logger";
-
-// Base URL for API requests
-const API_BASE_URL = "https://www.writestack.io";
+import { API_BASE_URL } from "@/utils/api";
 
 interface Response<T> {
   message: string;
@@ -36,11 +33,10 @@ function logScheduledPost(message: string, data?: any) {
 
 // Define API handler types
 type ApiHandlers = {
-  createSubstackPost: (
-    message?: string,
-    scheduleSeconds?: number,
-    autoCloseTab?: boolean
-  ) => Promise<Response<any>>;
+  createSubstackPost: (note?: {
+    bodyJson: any;
+    attachmentUrls?: string[];
+  }) => Promise<Response<any>>;
   getSubstackCookies: () => Promise<Response<string>>;
   setSubstackCookies: () => Promise<Response<any>>;
   createSchedule: (
@@ -118,10 +114,36 @@ const apiHandlers: ApiHandlers = {
   },
 
   // Create a post on Substack
-  createSubstackPost: async (bodyJson: any) => {
+  createSubstackPost: async (note?: {
+    bodyJson: any;
+    attachmentUrls?: string[];
+  }) => {
     try {
+      let attachments: NoteDraftImage[] = [];
+      if (!note) {
+        return {
+          success: false,
+          message: "No note provided",
+          action: "SUBSTACK_POST_CREATE",
+          result: JSON.stringify({ error: "No note provided" }),
+        };
+      }
+
+      if (note?.attachmentUrls && note.attachmentUrls.length > 0) {
+        attachments = await prepareAttachmentsForNote(note.attachmentUrls);
+      }
+
       const body =
-        typeof bodyJson === "string" ? bodyJson : JSON.stringify(bodyJson);
+        attachments.length > 0
+          ? JSON.stringify({
+              bodyJson: note?.bodyJson,
+              attachmentIds: attachments.map((a) => a.id),
+            })
+          : JSON.stringify({
+              bodyJson: note?.bodyJson,
+            });
+
+      console.log("Body:", body);
 
       const response = await fetch("https://substack.com/api/v1/comment/feed", {
         headers: {
@@ -133,13 +155,16 @@ const apiHandlers: ApiHandlers = {
         body,
         method: "POST",
       });
-      const data = await response.json();
+      const text = await response.text();
+      const data = JSON.parse(text);
       if (!response.ok) {
-        log("Response:", response);
-        log("Data:", data);
+        log("Response of Send note:", response);
+        log("Data of Send note:", data);
+        log("Text of Send note:", text);
         return {
+          success: false,
           message: "Failed to create post",
-          action: "SUBSTACK_POST_CREATED",
+          action: "SUBSTACK_POST_CREATES",
           result: JSON.stringify({ error: "Failed to create post" }),
         };
       }
@@ -266,6 +291,7 @@ const apiHandlers: ApiHandlers = {
     const results: ImageUploadResult[] = [];
 
     try {
+      log("Preparing attachments for note", imageUrls);
       // Use prepareAttachmentsForNote to process all images
       const attachments = await prepareAttachmentsForNote(imageUrls);
 
@@ -349,9 +375,12 @@ function callApiHandler(
       return apiHandlers.setSubstackCookies();
     case "createSubstackPost":
       return apiHandlers.createSubstackPost(
-        params[0] as string | undefined,
-        params[1] as number | undefined,
-        params[2] as boolean | undefined
+        params[0] as
+          | {
+              bodyJson: any;
+              attachmentIds?: string[];
+            }
+          | undefined
       );
     case "createSchedule":
       return apiHandlers.createSchedule(
@@ -435,7 +464,12 @@ chrome.runtime.onMessageExternal.addListener(
       if (action) {
         callApiHandler(action, params)
           .then((data: any) => {
-            sendResponse({ success: true, data });
+            if (data.success !== false) {
+              sendResponse({ success: true, data });
+            } else {
+              logError(`Error in API request (${action}):`, data);
+              sendResponse({ success: false, error: data.error });
+            }
           })
           .catch((error: Error) => {
             logError(`Error in API request (${action}):`, error);
@@ -451,7 +485,11 @@ chrome.runtime.onMessageExternal.addListener(
 
 chrome.runtime.onMessage.addListener(
   (request: ChromeMessage, sender, sendResponse) => {
-    log(`Background got internal from ${sender.url} message: ${JSON.stringify(request)}`);
+    log(
+      `Background got internal from ${sender.url} message: ${JSON.stringify(
+        request
+      )}`
+    );
 
     if (request?.type === "PING") {
       sendResponse({

@@ -1,6 +1,6 @@
 {
   "name": "WriteStack-dev",
-  "version": "1.3",
+  "version": "1.3.3",
   "description": "Helps users manage and schedule their Substack posts.",
   "manifest_version": 3,
   "icons": {

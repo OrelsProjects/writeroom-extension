@@ -14,6 +14,8 @@ const getScheduleTriggerAPI = (scheduleId: string) =>
   `api/v1/extension/schedule/${scheduleId}/triggered`;
 const getScheduleAPI = (scheduleId: string) =>
   `api/v1/extension/schedule/${scheduleId}`;
+const getScheduleByNoteIdAPI = (noteId: string) =>
+  `api/v1/extension/schedule/note/${noteId}`;
 const canPostScheduledNoteAPI = (scheduleId: string) =>
   `api/v1/extension/schedule/${scheduleId}/can-post`;
 
@@ -54,28 +56,43 @@ export async function handleScheduleTrigger(
   const freshSchedule = schedules.find(
     (s) => s.scheduleId === schedule.scheduleId
   );
-  if (!freshSchedule || freshSchedule.isProcessing) {
+
+  if (!freshSchedule) {
+    logError(
+      `Old schedule + ${JSON.stringify(
+        schedule
+      )}, new schedule + ${JSON.stringify(freshSchedule)}`
+    );
+  }
+
+  if (freshSchedule?.isProcessing) {
     log(`Skipping already processing schedule ${schedule.scheduleId}`);
     return {
       success: true,
       status: "processing",
     };
   }
+
+  let scheduleToUpdate = schedule || freshSchedule;
+
   try {
     // update the schedule as processing
-    freshSchedule.isProcessing = true;
+    scheduleToUpdate.isProcessing = true;
     await saveSchedules([
       ...schedules.filter((s) => s.scheduleId !== schedule.scheduleId),
-      freshSchedule,
+      scheduleToUpdate,
     ]);
 
     // Notify the API that a schedule has been triggered
-    const response = await getSchedule(schedule.scheduleId);
+    const response = await getSchedule(
+      scheduleToUpdate.scheduleId,
+      scheduleToUpdate.noteId
+    );
     log("getSchedule response", response);
     // If the jsonBody is empty, notify the API of the error
     if (!response || !response.jsonBody) {
       logError(`Empty body received for schedule: ${schedule.scheduleId}`);
-      await notifyScheduleTrigger(schedule, false, "EMPTY_BODY");
+      await notifyScheduleTrigger(scheduleToUpdate, false, "EMPTY_BODY");
       return {
         success: false,
         status: "error",
@@ -103,7 +120,7 @@ export async function handleScheduleTrigger(
       logError(
         `Error checking if can post scheduled note: ${canPostResponse?.error}`
       );
-      await notifyScheduleTrigger(schedule, false, "CANT_POST_ERROR");
+      await notifyScheduleTrigger(scheduleToUpdate, false, "POST_NOTE_FOUND");
       return {
         success: false,
         status: "error",
@@ -113,7 +130,7 @@ export async function handleScheduleTrigger(
 
     // Process attachments if any
     let attachments: NoteDraftImage[] = [];
-    if (response.attachmentUrls && response.attachmentUrls.length > 0) {
+    if (response?.attachmentUrls && response.attachmentUrls.length > 0) {
       try {
         log("Preparing attachments", response.attachmentUrls);
         attachments = await prepareAttachmentsForNote(response.attachmentUrls);
@@ -123,7 +140,7 @@ export async function handleScheduleTrigger(
           error
         );
         await notifyScheduleTrigger(
-          schedule,
+          scheduleToUpdate,
           false,
           "FAILED_TO_PREPARE_ATTACHMENTS",
           String(error)
@@ -209,10 +226,10 @@ export async function handleScheduleTrigger(
     };
   } finally {
     // update the schedule as not processing
-    freshSchedule.isProcessing = false;
+    scheduleToUpdate.isProcessing = false;
     await saveSchedules([
       ...schedules.filter((s) => s.scheduleId !== schedule.scheduleId),
-      freshSchedule,
+      scheduleToUpdate,
     ]);
   }
 }
@@ -223,23 +240,32 @@ export async function handleScheduleTrigger(
  * @returns Promise resolving to the API response
  */
 async function getSchedule(
-  scheduleId: string
+  scheduleId: string,
+  noteId?: string
 ): Promise<ScheduleTriggerResponse | null> {
   try {
     log("Getting schedule", scheduleId);
-    const schedule = await makeAuthenticatedRequest(
-      getScheduleAPI(scheduleId),
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    let schedule = await makeAuthenticatedRequest(getScheduleAPI(scheduleId), {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
 
     if (!schedule || !schedule.success) {
-      logError(`Error getting schedule ${scheduleId}: ${schedule?.error}`);
-      return null;
+      log(`Getting schedule by noteId ${noteId}`);
+      if (noteId) {
+        schedule = await makeAuthenticatedRequest(
+          getScheduleByNoteIdAPI(noteId),
+          {
+            method: "GET",
+          }
+        );
+      }
+      if (!schedule || !schedule.success) {
+        logError(`Error getting schedule ${scheduleId}: ${schedule?.error}`);
+        return null;
+      }
     }
 
     return schedule.data;

@@ -1,5 +1,5 @@
-const API_BASE_URL = "https://www.writestack.io";
-// const API_BASE_URL = "http://localhost:3000";
+import { API_BASE_URL } from "@/utils/api";
+
 const LOG_ENDPOINT = "api/v1/extension/log";
 
 /**
@@ -24,6 +24,11 @@ export async function log(message: string, data?: any): Promise<void> {
       source: "extension",
       level: "info",
     };
+
+    if (API_BASE_URL.includes("localhost")) {
+      console.log("Skipping log to server for localhost");
+      return;
+    }
 
     // Send to server endpoint
     await fetch(`${API_BASE_URL}/${LOG_ENDPOINT}`, {

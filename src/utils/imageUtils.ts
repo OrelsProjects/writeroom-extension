@@ -97,13 +97,15 @@ export async function uploadImageSubstack(
       }
     );
 
+    const responseText = await getImageResponse.text();
     if (!getImageResponse.ok) {
-      const responseText = await getImageResponse.text();
       logError(`Failed to get image from Substack: ${responseText}`);
       throw new Error("Failed to get image from Substack");
+    } else {
+      log("Got image from Substack, response:", responseText);
     }
 
-    const imageData: SubstackImageResponse = await getImageResponse.json();
+    const imageData: SubstackImageResponse = JSON.parse(responseText);
 
     // Store the image info
     const noteDraftImage: NoteDraftImage = {
@@ -142,7 +144,7 @@ function arrayBufferToBase64(buffer: Uint8Array): string {
  * @returns Promise resolving to array of uploaded images
  */
 export async function prepareAttachmentsForNote(
-  urls: string[],
+  urls: string[]
 ): Promise<NoteDraftImage[]> {
   if (!urls || urls.length === 0) {
     return [];

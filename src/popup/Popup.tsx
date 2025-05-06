@@ -1,12 +1,20 @@
 import React, { useEffect, useState } from "react";
 import "../styles/popup.css";
 import { Note } from "@/types/note";
-import { fetchNotesByScheduleIds } from "@/utils/scheduleApiService";
+import {
+  fetchNotesByScheduleIds,
+  sendNoteNow,
+} from "@/utils/scheduleApiService";
 import { getSchedules, Schedule, deleteSchedule } from "@/utils/scheduleUtils";
 import NoteCard from "./components/NoteCard";
 import DayDivider from "./components/DayDivider";
-import { RefreshCcw, Calendar } from "lucide-react";
+import { RefreshCcw, Calendar, ExternalLink } from "lucide-react";
 import { notifyScheduleTrigger } from "@/utils/scheduleTriggerService";
+import { logError } from "@/utils/logger";
+import { PostSubstackNoteResposne } from "@/types/substack-note";
+
+const buildNoteUrl = (noteData: PostSubstackNoteResposne) =>
+  `https://substack.com/@${noteData?.user_primary_publication.subdomain}/note/c-${noteData?.id}`;
 
 // Helper to format dates consistently for grouping
 const formatDateKey = (date: Date): string => {
@@ -17,6 +25,8 @@ const Popup: React.FC = () => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
+  const [noteSentData, setNoteSentData] =
+    useState<PostSubstackNoteResposne | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Grouped data structure
@@ -27,6 +37,10 @@ const Popup: React.FC = () => {
     days: [],
     groupedNotes: {},
   });
+
+  const updateNotes = (notes: Note[]) => {
+    setNotes(notes);
+  };
 
   const fetchData = async () => {
     try {
@@ -39,7 +53,7 @@ const Popup: React.FC = () => {
       // Fetch notes for these schedules
       const fetchedNotes = await fetchNotesByScheduleIds();
       console.log("Fetched notes:", fetchedNotes);
-      setNotes(fetchedNotes);
+      updateNotes(fetchedNotes);
     } catch (err) {
       console.error("Error fetching notes:", err);
       setError("Failed to load scheduled notes");
@@ -187,6 +201,26 @@ const Popup: React.FC = () => {
     return schedules.find((s) => s.scheduleId === note.scheduleId);
   };
 
+  const handleOpenNote = () => {
+    if (noteSentData) {
+      window.open(buildNoteUrl(noteSentData), "_blank");
+    }
+  };
+
+  const handleSendNoteNow = async (scheduleId: string) => {
+    try {
+      const note = await sendNoteNow(scheduleId);
+      if (note) {
+        setNoteSentData(note);
+      }
+      return note;
+    } catch (err) {
+      logError("Error sending note now:", err);
+      throw err;
+    }
+  };
+
+
   return (
     <div className="popup-container">
       <div className="popup-header">
@@ -201,6 +235,21 @@ const Popup: React.FC = () => {
           <RefreshCcw size={16} className="icon-button" />
         </button>
       </div>
+
+      {noteSentData && (
+        <div className="latest-sent-note">
+          <div className="latest-sent-header">
+            <span>🎉 Latest Note Sent</span>
+            <button onClick={handleOpenNote} className="action-button primary">
+              <ExternalLink size={16} className="icon-button" />
+              View Published Note
+            </button>
+          </div>
+          <div className="latest-sent-content">
+            <div className="note-title">{noteSentData.body || "Untitled Note"}</div>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="loading-container">
@@ -235,6 +284,7 @@ const Popup: React.FC = () => {
                       isMissed={isNoteMissed(note)}
                       onClose={() => handleDismissNote(schedule.scheduleId)}
                       onClearSchedule={handleClearSchedule}
+                      onSendNoteNow={handleSendNoteNow}
                     />
                   );
                 })}

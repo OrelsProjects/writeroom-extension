@@ -4,6 +4,7 @@ import { log, logError } from "./logger";
 import { getSchedules } from "./scheduleUtils";
 import { handleScheduleTrigger } from "./scheduleTriggerService";
 import { PostSubstackNoteResposne } from "@/types/substack-note";
+import { API_BASE_URL } from "@/utils/api";
 
 // API endpoint for fetching schedules
 const getSchedulesAPI = "api/v1/extension/schedules";
@@ -78,8 +79,6 @@ export async function sendNoteNow(
  * @param noteId ID of the note to reschedule
  */
 export function openRescheduleTab(noteId: string): void {
-    const url = `https://writestack.io/queue/?noteId=${noteId}`;
-  // TODO: For local development, use the local host
-  // const url = `http://localhost:3000/queue/?noteId=${noteId}`;
+  const url = `${API_BASE_URL}/queue/?noteId=${noteId}`;
   chrome.tabs.create({ url });
 }
