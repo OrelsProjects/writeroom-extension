@@ -35,6 +35,7 @@ export async function createSchedule(
   timestamp: number
 ): Promise<Schedule> {
   // Validate parameters
+  console.log("Creating schedule", scheduleId, userId, timestamp);
   if (!scheduleId || !userId || !timestamp) {
     throw new Error("Invalid schedule parameters");
   }
